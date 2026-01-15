@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+
+
+{% block head %}
+    {{ super() }}
+    <style>
+        /* Badge personalizzati per limiti traffico */
+        .badge.bg-secondary {
+            background-color: #6c757d !important;
+        }
+
+        .badge.bg-warning {
+            background-color: #ffc107 !important;
+            color: #000 !important;
+        }
+
+        .badge.bg-success {
+            background-color: #198754 !important;
+        }
+
+        .badge.bg-primary {
+            background-color: #0d6efd !important;
+        }
+
+        /* Icona infinito nel badge */
+        .badge .fas.fa-infinity {
+            font-size: 0.9em;
+        }
+
+        /* Tooltip per icone limite */
+        [title] {
+            cursor: help;
+        }
+
+        /* Responsive per colonna limite */
+        @media (max-width: 768px) {
+            .table td:nth-child(3) {
+                font-size: 0.85rem;
+            }
+        }
+        </style>
+{% endblock %}
+
+{% block title %}Gestione Utenti - Mercurio{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-users"></i> Gestione Utenti</h1>
+        <p class="text-muted">Amministrazione utenti e permessi del sistema</p>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('admin.new_user') }}" class="btn btn-primary">
+            <i class="fas fa-user-plus"></i> Nuovo Utente
+        </a>
+
+    </div>
+</div>
+
+<!-- Flash Messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+{% for category, message in messages %}
+<div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+    <i class="fas fa-{{ 'exclamation-triangle' if category == 'error' else 'info-circle' }}"></i>
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
+{% endwith %}
+
+<!-- Statistiche Utenti -->
+<div class="stats-row mb-4">
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-users fa-2x text-primary text-white mb-2"></i>
+                <h3>{{ users|length }}</h3>
+                <p class="mb-0">Totale Utenti</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-user-check fa-2x text-success text-white mb-2"></i>
+                <h3>{{ users|selectattr('is_active')|list|length }}</h3>
+                <p class="mb-0">Utenti Attivi</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-user-shield fa-2x text-warning text-white mb-2"></i>
+                <h3>{{ users|selectattr('role_name', 'equalto', 'administrator')|list|length }}</h3>
+                <p class="mb-0">Amministratori</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-download fa-2x text-primary text-white mb-2"></i>
+                <h3>
+                    {% set total_limit = users|sum(attribute='daily_traffic_limit_mb') %}
+                    {% if total_limit >= 1000 %}
+                        {{ (total_limit/1000)|round(1) }} GB
+                    {% else %}
+                        {{ total_limit or 0 }} MB
+                    {% endif %}
+                </h3>
+                <p class="mb-0">Traffico Totale/giorno</p>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Tabella Utenti -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-list"></i> Lista Utenti
+        </h5>
+    </div>
+    <div class="card-body p-0">
+        {% if users %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Utente</th>
+                        <th>Ruolo</th>
+                        <th>Limite MB/giorno</th>  <!-- NUOVA COLONNA -->
+                        <th>Token</th>
+                        <th>Stato</th>
+                        <th>Ultimo Accesso</th>
+                        <th>Azioni</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="me-3">
+                                    <i class="fas fa-user-circle fa-2x text-{{ 'success' if user.is_active else 'secondary' }}"></i>
+                                </div>
+                                <div>
+                                    <h6 class="mb-0">{{ user.nome }} {{ user.cognome }}</h6>
+                                    <small class="text-muted">{{ user.email }}</small>
+                                    {% if user.ente_azienda %}
+                                    <br><small class="text-info">{{ user.ente_azienda }}</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ 'warning' if user.role_name == 'administrator' else 'info' if user.role_name == 'user' else 'secondary' }}">
+                                {{ user.role_name or 'Nessuno' }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                {# Verifica se il valore è NULL (None), in quel caso usa 50. Se è 0, resta 0. #}
+                                {% set limit = user.daily_traffic_limit_mb if user.daily_traffic_limit_mb is not none else 50 %}
+                                
+                                {% if limit == 0 %}
+                                    <span class="badge bg-primary me-2">
+                                        <i class="fas fa-infinity"></i> Illimitato
+                                    </span>
+                                    <i class="fas fa-crown text-warning" title="Accesso illimitato"></i>
+                                {% else %}
+                                    <span class="badge bg-{{ 'success' if limit >= 500 else 'warning' if limit >= 100 else 'secondary' }} me-2">
+                                        {% if limit >= 1000 %}
+                                            {{ (limit/1000)|round(1) }} GB
+                                        {% else %}
+                                            {{ limit }} MB
+                                        {% endif %}
+                                    </span>
+                                    {% if limit <= 25 %}
+                                        <i class="fas fa-exclamation-triangle text-warning" title="Limite molto basso"></i>
+                                    {% elif limit >= 1000 %}
+                                        <i class="fas fa-crown text-warning" title="Limite elevato"></i>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            {% if user.active_tokens > 0 %}
+                            <span class="badge bg-info">{{ user.active_tokens }} token{{ 's' if user.active_tokens != 1 else '' }}</span>
+                            {% else %}
+                            <span class="text-muted">Nessuno</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ 'success' if user.is_active else 'secondary' }}">
+                                {{ 'Attivo' if user.is_active else 'Disattivo' }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if user.last_login %}
+                            <small>{{ user.last_login.strftime('%d/%m/%Y %H:%M') }}</small>
+                            {% else %}
+                            <small class="text-muted">Mai</small>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+							<div class="btn-group btn-group-sm" role="group">
+								<!-- Modifica (sempre visibile) -->
+								<a href="{{ url_for('admin.edit_user', user_id=user.user_id) }}" 
+								   class="btn btn-outline-primary" title="Modifica utente">
+									<i class="fas fa-edit"></i>
+								</a>
+
+								{% if current_user.user_id != user.user_id %}
+									<!-- Toggle Stato -->
+									<form method="POST" action="{{ url_for('admin.toggle_user_status', user_id=user.user_id) }}" 
+										  class="d-inline" onsubmit="return confirm('Confermi il cambio di stato?')">
+										<button type="submit" class="btn btn-outline-{{ 'warning' if user.is_active else 'success' }}" 
+												title="{{ 'Disattiva' if user.is_active else 'Attiva' }} utente">
+											<i class="fas fa-{{ 'pause' if user.is_active else 'play' }}"></i>
+										</button>
+									</form>
+
+									<!-- Gestione Token -->
+									<a href="{{ url_for('admin.admin_user_tokens', user_id=user.user_id) }}" 
+									   class="btn btn-outline-info" title="Gestisci token">
+										<i class="fas fa-key"></i>
+									</a>
+
+									<!-- Elimina -->
+									<form method="POST" action="{{ url_for('admin.delete_user', user_id=user.user_id) }}" 
+										  class="d-inline" onsubmit="return confirm('Sei sicuro di voler eliminare questo utente?')">
+										<button type="submit" class="btn btn-outline-danger" title="Elimina utente">
+											<i class="fas fa-trash"></i>
+										</button>
+									</form>
+								{% else %}
+									<!-- Utente corrente (pulsante disabilitato con dimensioni uniformi) -->
+									<button type="button" class="btn btn-outline-secondary disabled" title="Utente corrente">
+										<i class="fas fa-user"></i>
+									</button>
+								{% endif %}
+							</div>
+						</td>
+
+
+
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-users fa-3x text-muted mb-3"></i>
+            <p class="text-muted">Nessun utente presente nel sistema</p>
+            <a href="{{ url_for('admin.new_user') }}" class="btn btn-success">
+                <i class="fas fa-user-plus"></i> Crea Primo Utente
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Inizializza tooltip per le icone limite
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    console.log('✅ Tooltip limiti traffico inizializzati');
+});
+</script>
+{% endblock %}

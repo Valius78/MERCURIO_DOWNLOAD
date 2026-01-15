@@ -1,0 +1,406 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if action == 'edit' %}Modifica Utente{% else %}Nuovo Utente{% endif %} - Mercurio
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1>
+            <i class="fas fa-{{ 'edit' if action == 'edit' else 'plus' }} "></i>
+            {% if action == 'edit' %}Modifica Utente{% else %}Nuovo Utente{% endif %}
+        </h1>
+        <p class="text-muted">
+            {% if action == 'edit' %}
+                Modifica le informazioni dell'utente esistente
+            {% else %}
+                Crea un nuovo account utente per accedere al sistema
+            {% endif %}
+        </p>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Torna alla Lista
+        </a>
+    </div>
+</div>
+
+<!-- Flash Messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+{% for category, message in messages %}
+<div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+    <i class="fas fa-{{ 'exclamation-triangle' if category == 'error' else 'info-circle' }}"></i>
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
+{% endwith %}
+
+<form method="POST" action="{{ url_for('admin.save_user') }}" id="userForm">
+    {% if action == 'edit' and user %}
+    <input type="hidden" name="user_id" value="{{ user.user_id }}">
+    {% endif %}
+    
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Informazioni Personali -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-user"></i> Informazioni Personali</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="nome" class="form-label">Nome *</label>
+                                <input type="text" class="form-control" id="nome" name="nome" 
+                                       value="{{ user.nome if user else '' }}" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="cognome" class="form-label">Cognome *</label>
+                                <input type="text" class="form-control" id="cognome" name="cognome" 
+                                       value="{{ user.cognome if user else '' }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email *</label>
+                        <input type="email" class="form-control" id="email" name="email" 
+                               value="{{ user.email if user else '' }}" required>
+                        <div class="form-text">Utilizzata per il login nel sistema</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="ente_azienda" class="form-label">Ente/Azienda</label>
+                        <input type="text" class="form-control" id="ente_azienda" name="ente_azienda" 
+                               value="{{ user.ente_azienda if user else '' }}" 
+                               placeholder="Es: Università, Azienda, Organizzazione">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Sicurezza e Password -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-lock"></i> Sicurezza</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="password" class="form-label">
+                            Password {% if action == 'create' %}*{% else %}(lascia vuoto per non modificare){% endif %}
+                        </label>
+                        <input type="password" class="form-control" id="password" name="password" 
+                               {% if action == 'create' %}required{% endif %}>
+                        <div class="form-text">
+                            {% if action == 'edit' %}
+                                Lascia vuoto se non vuoi modificare la password esistente
+                            {% else %}
+                                Deve essere sicura e facile da ricordare per l'utente
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="confirm_password" class="form-label">
+                            Conferma Password {% if action == 'create' %}*{% endif %}
+                        </label>
+                        <input type="password" class="form-control" id="confirm_password" name="confirm_password">
+                        <div class="form-text">Ripeti la password per conferma</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <!-- Ruolo e Permessi -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-shield-alt"></i> Ruolo e Permessi</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="role_id" class="form-label">Ruolo *</label>
+                        <select class="form-select" id="role_id" name="role_id" required>
+                            <option value="">Seleziona ruolo...</option>
+                            {% for role in roles %}
+                            <option value="{{ role.role_id }}" 
+                                    {% if user and user.role_id == role.role_id %}selected{% endif %}>
+                                {{ role.name }} - {{ role.description }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Determina i permessi dell'utente nel sistema</div>
+                    </div>
+                    
+                    <!-- Anteprima Permessi -->
+                    <div id="permissions-preview" class="mt-3" style="display: none;">
+                        <h6><i class="fas fa-info-circle"></i> Permessi del ruolo:</h6>
+                        <div id="permissions-list" class="small"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Stato Account -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-toggle-on"></i> Stato Account</h5>
+                </div>
+                <div class="card-body">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="is_active" name="is_active" 
+                               {% if not user or user.is_active %}checked{% endif %}>
+                        <label class="form-check-label" for="is_active">
+                            Account Attivo
+                        </label>
+                    </div>
+                    <div class="form-text">
+                        Gli account disattivati non possono accedere al sistema
+                    </div>
+                    
+                    {% if action == 'edit' and user %}
+                    <hr>
+                    <small class="text-muted">
+                        <strong>Creato:</strong> {{ user.created_at.strftime('%d/%m/%Y %H:%M') if user.created_at }}<br>
+                        <strong>Ultimo accesso:</strong> 
+                        {% if user.last_login %}
+                            {{ user.last_login.strftime('%d/%m/%Y %H:%M') }}
+                        {% else %}
+                            Mai
+                        {% endif %}
+                    </small>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-download"></i> Limite Traffico Giornaliero
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="traffic_preset" class="form-label">Limite Download MB/giorno</label>
+                        <select class="form-select" id="traffic_preset" name="traffic_preset">
+                            <option value="">Seleziona limite predefinito</option>
+                            <!-- Opzione Nessun Limite -->
+                            <option value="0" 
+                                    {% if user and user.daily_traffic_limit_mb == 0 %}selected{% endif %}>
+                                🚀 Nessun Limite
+                            </option>
+                            {% if traffic_options %}
+                                {% for option in traffic_options %}
+                                <option value="{{ option }}" 
+                                        {% if user and user.daily_traffic_limit_mb == option %}selected{% endif %}
+                                        {% if not user and option == 50 %}selected{% endif %}>
+                                    {{ option }} MB
+                                    {% if option == 50 %} (Default){% endif %}
+                                    {% if option >= 1000 %} ({{ (option/1000)|round(1) }} GB){% endif %}
+                                </option>
+                                {% endfor %}
+                            {% endif %}
+                            <option value="custom" 
+                                    {% set is_custom = true %}
+                                    {% if user and traffic_options %}
+                                        {% if user.daily_traffic_limit_mb == 0 %}
+                                            {% set is_custom = false %}
+                                        {% endif %}
+                                        {% for option in traffic_options %}
+                                            {% if user.daily_traffic_limit_mb == option %}
+                                                {% set is_custom = false %}
+                                            {% endif %}
+                                        {% endfor %}
+                                        {% if is_custom %}selected{% endif %}
+                                    {% endif %}>
+                                🛠️ Limite Personalizzato
+                            </option>
+                        </select>
+                        <div class="form-text">
+                            Limite massimo di MB scaricabili al giorno dall'utente
+                        </div>
+                    </div>
+                    
+                    <!-- Campo Custom (mostrato quando selezionato) -->
+                    <div class="mb-3" id="custom_traffic_container" style="display: none;">
+                        <label for="traffic_limit_custom" class="form-label">Limite Personalizzato (MB)</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="traffic_limit_custom" 
+                                   name="traffic_limit_custom" min="0" max="{{ max_custom_limit or 2000 }}"
+                                   value="{{ user.daily_traffic_limit_mb if user else 50 }}"
+                                   placeholder="Es: 750 (0 = nessun limite)">
+                            <span class="input-group-text">MB</span>
+                        </div>
+                        <div class="form-text">
+                            0 = Nessun Limite | Min: 1 MB - Max: {{ max_custom_limit or 2000 }} MB
+                        </div>
+                    </div>
+                    
+                    <!-- Campo Hidden per valore finale -->
+                    <input type="hidden" name="traffic_limit_mb" id="traffic_limit_mb" 
+                           value="{{ user.daily_traffic_limit_mb if user else 50 }}">
+                    
+                    <!-- Info aggiuntive -->
+                    <div class="alert alert-info mt-3">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Come funziona:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>L'utente può scaricare fino a questo limite in MB al giorno</li>
+                            <li><strong>0 = Nessun Limite:</strong> L'utente può scaricare senza restrizioni</li>
+                            <li>Il contatore si azzera ogni giorno a mezzanotte UTC</li>
+                            <li>Superato il limite, i download vengono bloccati</li>
+                            <li>Gli amministratori hanno sempre accesso prioritario</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+
+
+
+
+            <!-- Pulsanti Azione -->
+            <div class="card">
+                <div class="card-body">
+                    <button type="submit" class="btn btn-primary w-100 mb-2">
+                        <i class="fas fa-save"></i>
+                        {% if action == 'edit' %}Aggiorna Utente{% else %}Crea Utente{% endif %}
+                    </button>
+                    
+                    <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary w-100">
+                        <i class="fas fa-times"></i> Annulla
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script>
+// Validazione password
+document.getElementById('userForm').addEventListener('submit', function(e) {
+    const password = document.getElementById('password').value;
+    const confirmPassword = document.getElementById('confirm_password').value;
+    
+    if (password && password !== confirmPassword) {
+        e.preventDefault();
+        alert('Le password non coincidono!');
+        return false;
+    }
+    
+    {% if action == 'create' %}
+    if (!password) {
+        e.preventDefault();
+        alert('La password è obbligatoria per un nuovo utente!');
+        return false;
+    }
+    {% endif %}
+});
+
+// Anteprima permessi ruolo (opzionale)
+document.getElementById('role_id').addEventListener('change', function() {
+    const preview = document.getElementById('permissions-preview');
+    const roleId = this.value;
+    
+    if (!roleId) {
+        preview.style.display = 'none';
+        return;
+    }
+    
+    // Mappa semplificata permessi per anteprima
+    const rolePermissions = {
+        '1': ['✅ Lettura database', '✅ Scrittura database', '✅ Gestione utenti', '✅ Pagine admin'],
+        '2': ['✅ Lettura database', '❌ Scrittura database', '❌ Gestione utenti', '❌ Pagine admin'],
+        '3': ['✅ Lettura limitata', '❌ Scrittura database', '❌ Gestione utenti', '❌ Pagine admin']
+    };
+    
+    if (rolePermissions[roleId]) {
+        document.getElementById('permissions-list').innerHTML = 
+            rolePermissions[roleId].map(p => `<div>${p}</div>`).join('');
+        preview.style.display = 'block';
+    } else {
+        preview.style.display = 'none';
+    }
+});
+
+// Gestione limite traffico dropdown + custom
+document.addEventListener('DOMContentLoaded', function() {
+    const trafficPreset = document.getElementById('traffic_preset');
+    const customContainer = document.getElementById('custom_traffic_container');
+    const customInput = document.getElementById('traffic_limit_custom');
+    const hiddenInput = document.getElementById('traffic_limit_mb');
+    
+    function updateTrafficLimit() {
+        const selectedValue = trafficPreset.value;
+        
+        if (selectedValue === 'custom') {
+            // Mostra campo custom
+            customContainer.style.display = 'block';
+            customInput.required = true;
+            
+            // Usa valore custom o default
+            const customValue = customInput.value || 50;
+            hiddenInput.value = customValue;
+            
+        } else if (selectedValue) {
+            // Usa valore preset
+            customContainer.style.display = 'none';
+            customInput.required = false;
+            hiddenInput.value = selectedValue;
+            
+        } else {
+            // Nessuna selezione - usa default
+            customContainer.style.display = 'none';
+            customInput.required = false;
+            hiddenInput.value = 50;
+        }
+        
+        console.log('🔄 Traffic limit aggiornato:', hiddenInput.value + ' MB');
+    }
+    
+    // Gestisci cambio dropdown
+    trafficPreset.addEventListener('change', updateTrafficLimit);
+    
+    // Gestisci input custom
+    customInput.addEventListener('input', function() {
+        if (trafficPreset.value === 'custom') {
+            hiddenInput.value = this.value || 50;
+            console.log('🔄 Custom traffic limit:', hiddenInput.value + ' MB');
+        }
+    });
+    
+    // Inizializza al caricamento
+    updateTrafficLimit();
+    
+    // Validazione form submission
+    document.getElementById('userForm').addEventListener('submit', function(e) {
+        const limitValue = parseInt(hiddenInput.value);
+        const maxLimit = {{ max_custom_limit or 2000 }};
+        
+        if (isNaN(limitValue) || limitValue < 0) {
+            e.preventDefault();
+            alert('Il limite traffico deve essere 0 (nessun limite) o un valore positivo');
+            return false;
+        }
+        
+        if (limitValue > maxLimit) {
+            e.preventDefault();
+            alert(`Il limite traffico non può superare ${maxLimit} MB`);
+            return false;
+        }
+        
+        if (limitValue === 0) {
+            console.log('✅ Form valido - Nessun limite traffico');
+        } else {
+            console.log('✅ Form valido - Limite traffico:', limitValue + ' MB');
+        }
+    });
+});
+
+</script>
+{% endblock %}

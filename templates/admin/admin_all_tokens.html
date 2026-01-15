@@ -1,0 +1,429 @@
+{% extends "base.html" %}
+
+{% block title %}Gestione Token Globale - Mercurio{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1>
+            <i class="fas fa-globe"></i>
+            Gestione Token Globale
+        </h1>
+        <p class="text-muted">Panoramica e controllo di tutti i token API nel sistema</p>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-users"></i> Gestione Utenti
+        </a>
+
+    </div>
+</div>
+
+<!-- Flash Messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+{% for category, message in messages %}
+<div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+    <i class="fas fa-{{ 'exclamation-triangle' if category == 'error' else 'check-circle' if category == 'success' else 'info-circle' }}"></i>
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
+{% endwith %}
+
+<!-- Statistiche Globali Token -->
+<div class="stats-row mb-4">
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-key fa-2x text-primary text-white mb-2"></i>
+                <h3>{{ tokens|length }}</h3>
+                <p class="mb-0">Token Totali</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-check-circle fa-2x text-success text-white mb-2"></i>
+                <h3>{{ tokens|selectattr('is_active', 'equalto', true)|list|length }}</h3>
+                <p class="mb-0">Attivi</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-pause-circle fa-2x text-secondary text-white mb-2"></i>
+                <h3>{{ tokens|selectattr('is_active', 'equalto', false)|list|length }}</h3>
+                <p class="mb-0">Disattivi</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-chart-line fa-2x text-info text-white mb-2"></i>
+                <h3>{{ tokens|sum(attribute='request_count') }}</h3>
+                <p class="mb-0">Richieste</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-tachometer-alt fa-2x text-warning text-white mb-2"></i>
+                <h3>
+                    {% set limited_tokens = [] %}
+                    {% for token in tokens %}
+                        {% if token.rate_limit_per_hour %}
+                            {% set _ = limited_tokens.append(token) %}
+                        {% endif %}
+                    {% endfor %}
+                    {{ limited_tokens|length }}
+                </h3>
+                <p class="mb-0">Con Limite</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-clock fa-2x text-danger text-white mb-2"></i>
+                <h3>
+                    {% set used_tokens = [] %}
+                    {% for token in tokens %}
+                        {% if token.last_used %}
+                            {% set _ = used_tokens.append(token) %}
+                        {% endif %}
+                    {% endfor %}
+                    {{ used_tokens|length }}
+                </h3>
+                <p class="mb-0">Utilizzati</p>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Filtri e Azioni Bulk -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h6 class="mb-2">Filtri Rapidi:</h6>
+                <div class="btn-group btn-group-sm" role="group">
+					<button type="button" class="btn btn-outline-primary active" onclick="filterTokens('all')">
+						Tutti ({{ tokens|length }})
+					</button>
+					<button type="button" class="btn btn-outline-success" onclick="filterTokens('active')">
+						Attivi ({{ tokens|selectattr('is_active', 'equalto', true)|list|length }})
+					</button>
+					<button type="button" class="btn btn-outline-secondary" onclick="filterTokens('inactive')">
+						Disattivi ({{ tokens|selectattr('is_active', 'equalto', false)|list|length }})
+					</button>
+					<button type="button" class="btn btn-outline-warning" onclick="filterTokens('limited')">
+						Con Limite (
+						{% set limited_count = 0 %}
+						{% for token in tokens %}
+							{% if token.rate_limit_per_hour %}
+								{% set limited_count = limited_count + 1 %}
+							{% endif %}
+						{% endfor %}
+						{{ limited_count }}
+						)
+					</button>
+					<button type="button" class="btn btn-outline-info" onclick="filterTokens('unused')">
+						Mai Usati (
+						{% set unused_count = 0 %}
+						{% for token in tokens %}
+							{% if not token.last_used %}
+								{% set unused_count = unused_count + 1 %}
+							{% endif %}
+						{% endfor %}
+						{{ unused_count }}
+						)
+					</button>
+				</div>
+            </div>
+            <div class="col-md-4 text-end">
+                <div class="btn-group btn-group-sm">
+                    <button type="button" class="btn btn-warning" onclick="selectAll()">
+                        <i class="fas fa-check-square"></i> Seleziona Tutti
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="clearSelection()">
+                        <i class="fas fa-square"></i> Deseleziona
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Azioni Bulk -->
+<div class="card mb-4" id="bulkActions" style="display: none;">
+    <div class="card-body bg-light">
+        <form method="POST" action="{{ url_for('admin.admin_bulk_token_action') }}" id="bulkForm">
+            <div class="row align-items-center">
+                <div class="col-md-4">
+                    <h6 class="mb-0">
+                        <i class="fas fa-tasks"></i> 
+                        Azioni su <span id="selectedCount">0</span> token selezionati:
+                    </h6>
+                </div>
+                <div class="col-md-8">
+                    <div class="btn-group btn-group-sm me-3">
+                        <button type="submit" name="action" value="enable" class="btn btn-success"
+                                onclick="return confirm('Abilitare i token selezionati?')">
+                            <i class="fas fa-play"></i> Abilita
+                        </button>
+                        <button type="submit" name="action" value="disable" class="btn btn-warning"
+                                onclick="return confirm('Disabilitare i token selezionati?')">
+                            <i class="fas fa-pause"></i> Disabilita
+                        </button>
+                        <button type="submit" name="action" value="delete" class="btn btn-danger"
+                                onclick="return confirm('ATTENZIONE: Eliminare definitivamente i token selezionati?')">
+                            <i class="fas fa-trash"></i> Elimina
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Tabella Token Globale -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-list"></i> Tutti i Token API
+        </h5>
+    </div>
+    <div class="card-body p-0">
+        {% if tokens %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="tokensTable">
+                <thead class="table-light">
+                    <tr>
+                        <th width="30">
+                            <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()">
+                        </th>
+                        <th>Utente</th>
+                        <th>Token</th>
+                        <th>Stato</th>
+                        <th>Rate Limit</th>
+                        <th>Ultimo Uso</th>
+                        <th>Richieste</th>
+                        <th>IP</th>
+                        <th class="text-center">Azioni</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for token in tokens %}
+                    <tr class="token-row {{ 'table-warning' if not token.is_active else '' }}" 
+                        data-status="{{ 'active' if token.is_active else 'inactive' }}"
+                        data-limited="{{ 'yes' if token.rate_limit_per_hour else 'no' }}"
+                        data-used="{{ 'yes' if token.last_used else 'no' }}">
+                        <td>
+                            <input type="checkbox" name="token_ids" value="{{ token.token_id }}" 
+                                   class="token-checkbox" onchange="updateBulkActions()">
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="me-3">
+                                    <i class="fas fa-user-circle fa-lg text-primary"></i>
+                                </div>
+                                <div>
+                                    <h6 class="mb-0">{{ token.nome }} {{ token.cognome }}</h6>
+                                    <small class="text-muted">{{ token.email }}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <div>
+                                <h6 class="mb-0">{{ token.description or token.token_name or 'Token senza descrizione' }}</h6>
+                                <small class="text-muted">
+                                    ID: {{ token.token_id }} | 
+                                    Creato: {{ token.created_at.strftime('%d/%m/%Y') if token.created_at }}
+                                </small>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ 'success' if token.is_active else 'secondary' }}">
+                                {{ 'Attivo' if token.is_active else 'Disattivo' }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if token.rate_limit_per_hour %}
+                            <span class="badge bg-warning text-dark">
+                                {{ token.rate_limit_per_hour }}/h
+                            </span>
+                            {% else %}
+                            <span class="text-muted">∞</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if token.last_used %}
+                            <small>
+                                {{ token.last_used.strftime('%d/%m/%Y %H:%M') }}<br>
+                                <span class="text-muted">
+                                    {% set days_ago = (moment().date() - token.last_used.date()).days %}
+                                    {% if days_ago == 0 %}Oggi
+                                    {% elif days_ago == 1 %}Ieri
+                                    {% elif days_ago < 7 %}{{ days_ago }} giorni fa
+                                    {% elif days_ago < 30 %}{{ (days_ago/7)|round|int }} settimane fa
+                                    {% else %}{{ (days_ago/30)|round|int }} mesi fa
+                                    {% endif %}
+                                </span>
+                            </small>
+                            {% else %}
+                            <span class="text-muted">Mai utilizzato</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ 'info' if token.request_count > 0 else 'light text-dark' }}">
+                                {{ token.request_count or 0 }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if token.last_ip %}
+                            <small class="font-monospace">{{ token.last_ip }}</small>
+                            {% else %}
+                            <small class="text-muted">-</small>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <!-- Gestione Specifica Utente -->
+                                <a href="{{ url_for('admin.admin_user_tokens', user_id=token.user_id) }}" 
+                                   class="btn btn-outline-primary" title="Gestisci token utente">
+                                    <i class="fas fa-user-cog"></i>
+                                </a>
+                                
+                                <!-- Toggle Stato -->
+                                <form method="POST" action="{{ url_for('admin.admin_toggle_token', token_id=token.token_id) }}" 
+                                      class="d-inline">
+                                    <button type="submit" class="btn btn-outline-{{ 'warning' if token.is_active else 'success' }}" 
+                                            title="{{ 'Disattiva' if token.is_active else 'Attiva' }} token"
+                                            onclick="return confirm('Confermi il cambio di stato?')">
+                                        <i class="fas fa-{{ 'pause' if token.is_active else 'play' }}"></i>
+                                    </button>
+                                </form>
+                                
+                                <!-- Elimina -->
+                                <form method="POST" action="{{ url_for('admin.admin_delete_token', token_id=token.token_id) }}" 
+                                      class="d-inline">
+                                    <button type="submit" class="btn btn-outline-danger" 
+                                            title="Elimina token"
+                                            onclick="return confirm('Eliminare questo token?')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-key fa-3x text-muted mb-3"></i>
+            <p class="text-muted">Nessun token API presente nel sistema</p>
+            <a href="{{ url_for('admin.users') }}" class="btn btn-primary">
+                <i class="fas fa-users"></i> Gestione Utenti
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+// Gestione filtri e selezioni
+function filterTokens(type) {
+    const rows = document.querySelectorAll('.token-row');
+    const buttons = document.querySelectorAll('.btn-group button');
+    
+    // Reset button states
+    buttons.forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+    
+    rows.forEach(row => {
+        let show = false;
+        
+        switch(type) {
+            case 'all':
+                show = true;
+                break;
+            case 'active':
+                show = row.dataset.status === 'active';
+                break;
+            case 'inactive':
+                show = row.dataset.status === 'inactive';
+                break;
+            case 'limited':
+                show = row.dataset.limited === 'yes';
+                break;
+            case 'unused':
+                show = row.dataset.used === 'no';
+                break;
+        }
+        
+        row.style.display = show ? '' : 'none';
+    });
+    
+    clearSelection();
+}
+
+function selectAll() {
+    const visibleCheckboxes = document.querySelectorAll('.token-row:not([style*="display: none"]) .token-checkbox');
+    visibleCheckboxes.forEach(cb => cb.checked = true);
+    updateBulkActions();
+}
+
+function clearSelection() {
+    document.querySelectorAll('.token-checkbox').forEach(cb => cb.checked = false);
+    document.getElementById('selectAllCheckbox').checked = false;
+    updateBulkActions();
+}
+
+function toggleSelectAll() {
+    const selectAll = document.getElementById('selectAllCheckbox').checked;
+    const visibleCheckboxes = document.querySelectorAll('.token-row:not([style*="display: none"]) .token-checkbox');
+    visibleCheckboxes.forEach(cb => cb.checked = selectAll);
+    updateBulkActions();
+}
+
+function updateBulkActions() {
+    const selected = document.querySelectorAll('.token-checkbox:checked');
+    const bulkActions = document.getElementById('bulkActions');
+    const selectedCount = document.getElementById('selectedCount');
+    
+    if (selected.length > 0) {
+        bulkActions.style.display = 'block';
+        selectedCount.textContent = selected.length;
+        
+        // Copia checkboxes selezionate nel form bulk
+        const bulkForm = document.getElementById('bulkForm');
+        bulkForm.querySelectorAll('input[name="token_ids"]').forEach(input => input.remove());
+        
+        selected.forEach(cb => {
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'token_ids';
+            hiddenInput.value = cb.value;
+            bulkForm.appendChild(hiddenInput);
+        });
+    } else {
+        bulkActions.style.display = 'none';
+    }
+}
+</script>
+{% endblock %}

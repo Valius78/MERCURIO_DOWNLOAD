@@ -1,0 +1,177 @@
+{% extends "base.html" %} {% block title %} {{ 'Modifica' if action == 'edit'
+else 'Nuovo' }} System - Mercurio {% endblock %} {% block content %}
+<div class="row mb-4">
+  <div class="col-md-8">
+    <h1>
+      <i class="fas fa-{{ 'edit' if action == 'edit' else 'plus' }}"></i>
+      Sistema
+    </h1>
+    <p class="text-muted">Dettagli sistema di acquisizione</p>
+  </div>
+  <div class="col-md-4 text-end">
+    <a
+      href="{{ url_for('systems.systems') }}"
+      class="btn btn-outline-secondary"
+    >
+      <i class="fas fa-arrow-left"></i> Torna alla Lista
+    </a>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="mb-0">
+          <i class="fas fa-info-circle"></i>
+          Informazioni Sistema
+        </h5>
+      </div>
+      <div class="card-body">
+        <form
+          action="{{ url_for('systems.save_system') }}"
+          method="POST"
+          id="systemForm"
+        >
+          <fieldset id="formFieldset">
+            {% if system %}
+            <input
+              type="hidden"
+              name="system_id"
+              value="{{ system.system_id }}"
+            />
+            {% endif %}
+
+            <!-- Nome -->
+            <div class="mb-3">
+              <label for="name" class="form-label">
+                <i class="fas fa-tag"></i> Nome Sistema
+                <span class="text-danger">*</span>
+              </label>
+              <input
+                type="text"
+                class="form-control"
+                id="name"
+                name="name"
+                value="{{ system.name if system else '' }}"
+                required
+                maxlength="100"
+                placeholder="es. Sistema Sensoristico, Laser Scanner, Droni"
+              />
+            </div>
+
+            <!-- Descrizione -->
+            <div class="mb-3">
+              <label for="description" class="form-label">
+                <i class="fas fa-align-left"></i> Descrizione
+              </label>
+              <textarea
+                class="form-control"
+                id="description"
+                name="description"
+                rows="3"
+                placeholder="Descrizione dettagliata del sistema di acquisizione..."
+              >
+{{ system.description if system else '' }}</textarea
+              >
+            </div>
+          </fieldset>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar informativa -->
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-header">
+        <h6 class="mb-0"><i class="fas fa-lightbulb"></i> Esempi di Sistema</h6>
+      </div>
+      <div class="card-body">
+        <div class="mb-3">
+          <ul class="list-unstyled small">
+            <li><i class="fas fa-thermometer-half"></i> Sensori ambientali</li>
+            <li><i class="fas fa-helicopter"></i> Rilievi con droni</li>
+            <li><i class="fas fa-satellite"></i> Dati satellitari</li>
+            <li><i class="fas fa-eye"></i> Laser scanner</li>
+            <li><i class="fas fa-ship"></i> Rilievi ROV</li>
+          </ul>
+        </div>
+
+        <div class="card card-body bg-light mb-4">
+          <small class="text-muted">
+            <i class="fas fa-info-circle me-1"></i>
+            <strong>Sistemi vs Misure:</strong>
+            <div class="mt-1">
+              <p class="mb-0">
+                <i class="fas fa-circle fa-xs me-2"></i> Sistema =
+                Tecnologia/strumento
+              </p>
+              <p class="mb-0">
+                <i class="fas fa-circle fa-xs me-2"></i> Misura = Specifica
+                configurazione
+              </p>
+            </div>
+          </small>
+        </div>
+      </div>
+    </div>
+
+    {% if system %}
+    <div class="card mt-3">
+      <div class="card-header">
+        <h6 class="mb-0">
+          <i class="fas fa-info-circle"></i> Informazioni System
+        </h6>
+      </div>
+      <div class="card-body">
+        <small class="text-muted">
+          <strong>ID:</strong> {{ system.system_id }}<br />
+          <strong>Nome:</strong> {{ system.name }}<br />
+          {% if system.description %}
+          <strong>Descrizione:</strong> {{ system.description[:50] }}... {%
+          endif %}
+        </small>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %} {% block scripts %}
+<script>
+  document.getElementById("formFieldset").disabled = true;
+  document.addEventListener("DOMContentLoaded", function () {
+    const form = document.getElementById("systemForm");
+    const nameInput = document.getElementById("name");
+
+    // Auto-capitalize first letter of name
+    nameInput.addEventListener("blur", function () {
+      if (this.value) {
+        this.value = this.value.charAt(0).toUpperCase() + this.value.slice(1);
+      }
+    });
+
+    // Validation before submit
+    form.addEventListener("submit", function (e) {
+      if (!nameInput.value.trim()) {
+        e.preventDefault();
+        alert("Nome sistema obbligatorio");
+        nameInput.focus();
+        return false;
+      }
+
+      // Confirm submission
+      const action = "{{ action }}";
+      const message =
+        action === "edit"
+          ? "Confermi le modifiche al sistema?"
+          : "Confermi la creazione del nuovo sistema?";
+
+      if (!confirm(message)) {
+        e.preventDefault();
+        return false;
+      }
+    });
+  });
+</script>
+{% endblock %}

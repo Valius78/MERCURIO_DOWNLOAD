@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if action == 'edit' %}Modifica Misura{% else %}Nuova Misura{% endif %} - Mercurio
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1>
+            <i class="fas fa-{{ 'edit' if action == 'edit' else 'plus' }}"></i>
+            Misura
+        </h1>
+        <p class="text-muted">
+            Dettagli della misura esistente
+        </p>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('measurements.measurements') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Torna alla Lista
+        </a>
+    </div>
+</div>
+
+<form method="POST" action="{{ url_for('measurements.save_measurement') }}" id="measurementForm">
+    <fieldset id="formFieldset">
+    {% if measurement %}
+        <input type="hidden" name="measurement_id" value="{{ measurement.measurement_id }}">
+    {% endif %}
+    
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-info-circle"></i> Informazioni Misura</h5>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- System di appartenenza -->
+                    <div class="mb-3">
+                        <label for="system_id" class="form-label">Sistema di Appartenenza</label>
+                        <select class="form-select" id="system_id" name="system_id" required>
+                            <option value="">Seleziona sistema...</option>
+                            {% for system in systems %}
+                            <option value="{{ system.system_id }}"
+                                    {% if measurement and measurement.system_id == system.system_id %}selected{% endif %}
+                                    data-system-name="{{ system.name }}">
+                                {{ system.name }}
+                                {% if system.description %} - {{ system.description[:50] }}...{% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        
+                    </div>
+                    
+                    <!-- Nome Measurement -->
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Nome Misura</label>
+                        <input type="text" class="form-control" id="name" name="name"
+                               value="{{ measurement.name if measurement else '' }}"
+                               placeholder="es. water content, temperature, acceleration..." required>
+                        
+                    </div>
+                    
+                    <!-- Codice Measurement - MANUALE -->
+                    <div class="mb-3">
+                        <label for="code" class="form-label">Codice Misura</label>
+                        <input type="text" class="form-control" id="code" name="code" 
+                               value="{{ measurement.code if measurement else '' }}" 
+                               placeholder="es. WTR, TEMP, ACC..." 
+                               maxlength="50"
+                               style="text-transform: uppercase;">
+                        
+                    </div>
+                    
+                    <!-- Descrizione -->
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Descrizione</label>
+                        <textarea class="form-control" id="description" name="description" 
+                                  rows="3" placeholder="es. sensore di contenuto d'acqua del terreno"
+                                  maxlength="1000">{{ measurement.description if measurement else '' }}</textarea>
+                        
+                    </div>
+                    
+                    <!-- Metadata JSON -->
+                    <div class="mb-3">
+                        <label for="metadata" class="form-label">Metadata (JSON)</label>
+                        <textarea class="form-control font-monospace" id="metadata" name="metadata" 
+                                  rows="4" placeholder='{"unit": "percentage", "range": {"min": 0, "max": 100}}'
+                                  style="font-size: 0.9em;">{{ measurement.metadata | tojson if measurement and measurement.metadata else '' }}</textarea>
+
+                    </div>
+                    
+                    
+                </div>
+            </div>
+            
+
+            
+        </div>
+
+
+		<div class="col-md-4">
+			{% if measurement %}
+			<!-- Statistiche measurement esistente (SOLO in edit mode) -->
+			<div class="card">
+				<div class="card-header">
+					<h6><i class="fas fa-chart-bar"></i> Statistiche Misura</h6>
+				</div>
+				<div class="card-body">
+					<div class="row text-center">
+						<div class="col-12 mb-2">
+							<h6 class="text-success mb-0">{{ measurement.total_items }}</h6>
+							<small class="text-muted">Items Collegati</small>
+						</div>
+						<div class="col-12 mb-2">
+							<h6 class="text-info mb-0">{{ measurement.total_channels }}</h6>
+							<small class="text-muted">Channels Totali</small>
+						</div>
+					</div>
+				</div>
+			</div>
+			{% endif %}
+			
+			
+		</div>
+
+
+        
+    </div>
+    </fieldset>
+</form>
+
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.getElementById('formFieldset').disabled = true;
+   
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        loadMeasurementStats({{ measurement.measurement_id }});
+    });
+    
+
+
+
+    // Riempi template predefinito
+    function fillTemplate(templateKey) {
+        const template = templates[templateKey];
+        if (!template) return;
+        
+        if (confirm(`Vuoi utilizzare il template "${template.name}"?\n\nQuesta azione sovrascriverà i campi correnti.`)) {
+            document.getElementById('name').value = template.name;
+            document.getElementById('code').value = template.code;
+            document.getElementById('description').value = template.description;
+            document.getElementById('metadata').value = template.metadata;
+        }
+    }
+    
+
+    
+    
+    // Carica statistiche measurement (per edit mode)
+    async function loadMeasurementStats(measurementId) {
+        try {
+            const response = await fetch(`/api/measurements/${measurementId}/stats`);
+            const stats = await response.json();
+            
+            // Usa gli ID che esistono realmente nel DOM
+            const itemsElement = document.querySelector('.text-success');
+            const channelsElement = document.querySelector('.text-info');
+            
+            if (itemsElement) itemsElement.textContent = stats.items_count || 0;
+            if (channelsElement) channelsElement.textContent = stats.channels_count || 0;
+        } catch (error) {
+            console.error('Errore caricamento statistiche:', error);
+        }
+    }
+    
+   
+
+</script>
+
+<style>
+    .cursor-pointer {
+        cursor: pointer;
+    }
+    
+    .badge.bg-light:hover {
+        background-color: #e9ecef !important;
+        transform: scale(1.05);
+        transition: all 0.2s ease;
+    }
+    
+    .metadata-example {
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+    }
+    
+    .metadata-example:hover {
+        background-color: #e3f2fd !important;
+    }
+    
+    .is-valid {
+        border-color: #198754 !important;
+    }
+    
+    .is-invalid {
+        border-color: #dc3545 !important;
+    }
+</style>
+{% endblock %}

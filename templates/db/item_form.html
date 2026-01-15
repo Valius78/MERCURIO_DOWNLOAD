@@ -1,0 +1,419 @@
+{% extends "base.html" %}
+
+{% block head %}
+    {{ super() }}
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        #itemMap {
+            height: 350px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+        }
+        .coordinate-input {
+            font-family: monospace;
+        }
+    </style>
+{% endblock %}
+
+{% block title %}
+    Item - Mercurio
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1>
+            <i class="fas fa-{{ 'edit' if action == 'edit' else 'plus' }}"></i>
+            Item
+        </h1>
+        <p class="text-muted">
+            
+                Informazioni dell'item fisico esistente
+            
+        </p>
+    </div>
+    <div class="col-auto">
+        <div class="btn-group" role="group" aria-label="Azioni secondarie e lista">
+            
+            <a href="{{ url_for('items.items') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Torna alla Lista
+            </a>
+        </div>
+    </div>
+</div>
+
+<form method="POST"  id="itemForm">
+  
+    {% if action == 'edit' and item %}
+    <input type="hidden" name="item_id" value="{{ item.item_id }}">
+    {% endif %}
+    
+    <div class="row">
+        <div class="col-md-8">
+              <fieldset id="formFieldset">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Informazioni Item</h5>
+                </div>
+                <div class="card-body">
+                    
+                    {% if action == 'edit' %}
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">
+                                <i class="fas fa-map"></i> Scenario
+                            </label>
+                            <input type="text" class="form-control" readonly style="background-color: #f8f9fa;" 
+                                value="{% if item %}{{ item.scenario_name }}{% if item.scenario_code %} ({{ item.scenario_code }}){% endif %}{% endif %}">
+                            
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">
+                                <i class="fas fa-map-marked-alt"></i> Area
+                            </label>
+                            <input type="text" class="form-control" readonly style="background-color: #f8f9fa;" 
+                                value="{% if item %}{{ item.area_name }}{% if item.area_code %} ({{ item.area_code }}){% endif %}{% endif %}">
+                            <input type="hidden" name="area_id" value="{{ item.area_id if item else '' }}">
+                            
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">
+                                <i class="fas fa-ruler-combined"></i> Tipo di misura
+                            </label>
+                            <input type="text" class="form-control" readonly style="background-color: #f8f9fa;" 
+                                value="{% if item %}[{{ item.system_name }}] {{ item.measurement_name }}{% endif %}">
+                            <input type="hidden" name="measurement_id" value="{{ item.measurement_id if item else '' }}">
+                            
+                        </div>
+                    </div>
+
+                    {% else %}
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="scenario_id" class="form-label">
+                                <i class="fas fa-map"></i> Scenario
+                            </label>
+                            <select name="scenario_id" id="scenario_id" class="form-select" 
+                                    onchange="updateAreasByScenario()" required>
+                                <option value="">-- Seleziona Scenario --</option>
+                                {% for scenario in scenarios %}
+                                <option value="{{ scenario.scenario_id }}">
+                                    {{ scenario.name }} ({{ scenario.code }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Scenario di appartenenza</div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="area_id" class="form-label">
+                                <i class="fas fa-map-marked-alt"></i> Area
+                            </label>
+                            <select name="area_id" id="area_id" class="form-select" required 
+                                    onchange="inheritAreaCoords()">
+                                <option value="">-- Prima seleziona uno Scenario --</option>
+                            </select>
+                            <div class="form-text">Area di appartenenza (filtrata per scenario)</div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="measurement_id" class="form-label">Measurement Type</label>
+                            <select class="form-select" id="measurement_id" name="measurement_id" required onchange="updateMeasurementInfo()">
+                                <option value="">Seleziona tipo di Misura</option>
+                                {% for measurement in measurements %}
+                                <option value="{{ measurement.measurement_id }}" 
+                                        data-system="{{ measurement.system_name }}"
+                                        data-code="{{ measurement.code }}"
+                                        data-description="{{ measurement.description or '' }}">
+                                    [{{ measurement.system_name }}] {{ measurement.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Tipo di misurazione che effettuerà l'item</div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="alert alert-info" id="codePreview" style="display: none;">
+                        <h6><i class="fas fa-barcode"></i> Codice Item Auto-generato</h6>
+                        <code class="text-primary fs-5" id="generatedCode">-</code>
+                        <br><small class="text-muted">Schema: SCENARIO-AREA-MEASUREMENT-NUMERO</small>
+                    </div>
+                    <input type="hidden" id="code" name="code" value="{{ item.code if item else '' }}">
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="name" class="form-label">Nome Item</label>
+                                <input type="text" class="form-control" id="name" name="name" 
+                                        value="{{ item.name if item else '' }}" required>
+                                
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="description" class="form-label">Descrizione</label>
+                                <input type="text" class="form-control" id="description" name="description" 
+                                        value="{{ item.description if item else '' }}">
+                               
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="acquisition_type" class="form-label">Tipo Acquisizione</label>
+                            <select class="form-select" id="acquisition_type" name="acquisition_type">
+                                <option value="continuous" {% if not item or item.acquisition_type == 'continuous' %}selected{% endif %}>
+                                    🔄 Continua (Sensore Installato)
+                                </option>
+                                <option value="discrete" {% if item and item.acquisition_type == 'discrete' %}selected{% endif %}>
+                                    📅 Discreta (Rilievo Puntuale)
+                                </option>
+                                <option value="periodic" {% if item and item.acquisition_type == 'periodic' %}selected{% endif %}>
+                                    🛰️ Periodica (Dati Satellitari)
+                                </option>
+                            </select>
+                            
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label for="acquisition_date" class="form-label">Data Acquisizione</label>
+                            <input type="date" class="form-control" id="acquisition_date" name="acquisition_date" 
+                                    value="{{ item.acquisition_date.strftime('%Y-%m-%d') if item and item.acquisition_date else '' }}">
+                            
+                        </div>
+                    </div>
+                </div>
+            </div>
+            </div>
+        
+        <div class="col-md-4">
+            <div class="card mb-3" id="areaInfoCard" style="display: none;">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0"><i class="fas fa-map-marked-alt"></i> Area Selezionata</h6>
+                </div>
+                <div class="card-body">
+                    <div id="areaInfoContent">
+                        </div>
+                </div>
+            </div>
+            
+            <div class="card mb-3" id="measurementInfoCard" style="display: none;">
+                <div class="card-header bg-secondary text-white">
+                    <h6 class="mb-0"><i class="fas fa-ruler-combined"></i> Measurement Selezionato</h6>
+                </div>
+                <div class="card-body">
+                    <div id="measurementInfoContent">
+                        </div>
+                </div>
+            </div>
+            
+            {% if action == 'edit' and item %}
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-info-circle"></i> Info Item</h6>
+                </div>
+                <div class="card-body">
+                    <small class="text-muted">
+                        <strong>ID:</strong> {{ item.item_id }}<br>
+                        <strong>Codice:</strong> {{ item.code or 'N/A' }}<br>
+                        <strong>Creato:</strong> {{ item.created_at.strftime('%d/%m/%Y %H:%M') if item.created_at else 'N/A' }}<br>
+                        {% if item.total_channels is defined %}
+                        <strong>Channels:</strong> {{ item.total_channels or 0 }}<br>
+                        <strong>Parameters:</strong> {{ item.total_parameters or 0 }}<br>
+                        {% endif %}
+                    </small>
+                </div>
+            </div>
+            {% endif %}
+            
+                
+        </div>
+        </fieldset>
+        </div> 
+            
+            <div class="row">
+                <div class="col-md-12">
+
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-map-marker-alt"></i> Posizione Geografica</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="latitude" class="form-label">Latitudine</label>
+                            <input disabled type="number" class="form-control coordinate-input" id="latitude" name="latitude" 
+                                    step="0.000001" min="-90" max="90"
+                                    value="{{ item.latitude if item and item.latitude else '' }}"
+                                    onchange="updateMapFromCoords()">
+                            <div class="form-text">Coordinata Y (WGS84)</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="longitude" class="form-label">Longitudine</label>
+                            <input disabled type="number" class="form-control coordinate-input" id="longitude" name="longitude" 
+                                    step="0.000001" min="-180" max="180"
+                                    value="{{ item.longitude if item and item.longitude else '' }}"
+                                    onchange="updateMapFromCoords()">
+                            <div class="form-text">Coordinata X (WGS84)</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="elevation_m" class="form-label">Elevazione (m)</label>
+                            <input  disabled type="number" class="form-control" id="elevation_m" name="elevation_m" 
+                                    step="0.1"
+                                    value="{{ item.elevation_m if item and item.elevation_m else '' }}">
+                            <div class="form-text">Altitudine slm</div>
+                        </div>
+                    </div>
+
+
+                    
+                    
+                    <div id="itemMap"></div>
+
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-tags"></i> Metadata Aggiuntivi</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="metadata" class="form-label">Metadata (JSON)</label>
+                        <textarea disabled class="form-control font-monospace" id="metadata" name="metadata" 
+                                rows="6" placeholder='{"manufacturer": "Example Corp", "model": "Sensor XYZ", "serial_number": "12345"}'
+                                style="font-size: 0.9em;">{% if item and item.metadata %}{{ item.metadata | tojson(indent=2) }}{% endif %}</textarea>
+
+                    </div>
+                </div>
+            </div>
+            
+        
+        </div>
+ 
+    </form>
+
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+let map;
+let marker;
+document.getElementById('formFieldset').disabled = true;
+
+
+// Inizializza filtri al caricamento pagina (per edit mode)
+document.addEventListener('DOMContentLoaded', function() {
+    initMap();
+    initForm();
+    updateAcquisitionDateField();
+    
+    // Event listeners per i campi del form - CON CONTROLLI DI SICUREZZA
+    const areaSelect = document.getElementById('area_id');
+    const measurementSelect = document.getElementById('measurement_id');
+    const latitudeInput = document.getElementById('latitude');
+    const longitudeInput = document.getElementById('longitude');
+    const acquisitionTypeSelect = document.getElementById('acquisition_type');
+    
+    // Area select (solo se esiste - non esiste in edit mode)
+    if (areaSelect) {
+        areaSelect.addEventListener('change', function() {
+            updateAreaInfo();
+            inheritAreaCoords();
+            updateItemCode();
+        });
+    }
+    
+    // Measurement select (solo se esiste - non esiste in edit mode)
+    if (measurementSelect) {
+        measurementSelect.addEventListener('change', function() {
+            updateMeasurementInfo();
+            updateItemCode();
+        });
+    }
+
+    // Coordinate inputs (esistono sempre)
+    if (latitudeInput) {
+        latitudeInput.addEventListener('input', checkCoordinatesWarning);
+    }
+    
+    if (longitudeInput) {
+        longitudeInput.addEventListener('input', checkCoordinatesWarning);
+    }
+    
+    // Acquisition type (esiste sempre)
+    if (acquisitionTypeSelect) {
+        acquisitionTypeSelect.addEventListener('change', updateAcquisitionDateField);
+    }
+});
+
+// === INIZIALIZZAZIONE MAPPA ===
+function initMap() {
+    const defaultLat = {{ item.latitude if item and item.latitude else 40.8518 }};
+    const defaultLng = {{ item.longitude if item and item.longitude else 14.2681 }};
+    
+    map = L.map('itemMap').setView([defaultLat, defaultLng], 20);
+    
+    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    });
+    const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles © Esri'
+    });
+    satellite.addTo(map);
+    
+    L.control.layers({
+        "OpenStreetMap": osm,
+        "Satellite": satellite
+    }).addTo(map);
+    
+    {% if item and item.latitude and item.longitude %}
+    marker = L.marker([{{ item.latitude }}, {{ item.longitude }}], {
+        draggable: true
+    }).addTo(map);
+    marker.on('dragend', function(e) {
+        updateCoordsFromMap(e.target.getLatLng());
+    });
+    {% endif %}
+    
+    map.on('click', function(e) {
+        updateMarkerPosition(e.latlng);
+        updateCoordsFromMap(e.latlng);
+    });
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</script>
+{% endblock %}

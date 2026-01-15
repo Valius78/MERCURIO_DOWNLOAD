@@ -1,0 +1,360 @@
+/**
+ * VISUALIZER MAIN CSS
+ * Stili principali per il readings visualizer modulare
+ */
+
+/* ================================
+   MODAL E LAYOUT
+   ================================ */
+
+#readingsModal .modal-dialog {
+    max-width: 95vw;
+    width: 95vw;
+    margin: 1.75rem auto;
+}
+
+#readingsModal .modal-content {
+    border-radius: 12px;
+    border: none;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+#readingsModal .modal-header {
+    border-radius: 12px 12px 0 0;
+    padding: 1.25rem;
+}
+
+#readingsModal .modal-body {
+    padding: 0;
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+#readingsModal .modal-footer {
+    border-radius: 0 0 12px 12px;
+    border-top: 1px solid #dee2e6;
+}
+
+/* ================================
+   CONTROLLI PERIODO E VISTA
+   ================================ */
+
+.btn-check:checked + .btn-outline-primary {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+    color: #fff;
+}
+
+.btn-check:checked + .btn-outline-secondary {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    color: #fff;
+}
+
+.btn-check:checked + .btn-outline-success {
+    background-color: #198754;
+    border-color: #198754;
+    color: #fff;
+}
+
+.form-control:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+/* ================================
+   CONTENITORI PRINCIPALI
+   ================================ */
+
+#canvasContainer {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 1px solid #dee2e6;
+    border-radius: 10px;
+    position: relative;
+    overflow: hidden;
+}
+
+#readingsChart {
+    border-radius: 8px;
+}
+
+#loadingSpinner {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 10px;
+}
+
+#loadingSpinner .spinner-border {
+    border-width: 0.25em;
+}
+
+/* ================================
+   CONTENT TYPE INDICATOR
+   ================================ */
+
+#contentTypeIndicator {
+    animation: slideIn 0.3s ease-out;
+}
+
+#contentTypeBadge {
+    font-size: 0.95rem !important;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* ================================
+   CARDS E CONTENUTI
+   ================================ */
+
+.card {
+    transition: all 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.card-header {
+    font-weight: 600;
+}
+
+.card-header.bg-primary {
+    background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%) !important;
+}
+
+.card-header.bg-success {
+    background: linear-gradient(135deg, #198754 0%, #146c43 100%) !important;
+}
+
+.card-header.bg-danger {
+    background: linear-gradient(135deg, #dc3545 0%, #b02a37 100%) !important;
+}
+
+.card-header.bg-warning {
+    background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%) !important;
+}
+
+/* ================================
+   RESPONSIVITÀ
+   ================================ */
+
+@media (max-width: 768px) {
+    #readingsModal .modal-dialog {
+        max-width: 100vw;
+        width: 100vw;
+        margin: 0;
+        height: 100vh;
+    }
+    
+    #readingsModal .modal-content {
+        height: 100vh;
+        border-radius: 0;
+    }
+    
+    #readingsModal .modal-body {
+        max-height: calc(100vh - 120px);
+    }
+    
+    .btn-group .btn {
+        font-size: 0.8rem;
+        padding: 0.4rem 0.6rem;
+    }
+    
+    #canvasContainer {
+        height: 300px !important;
+    }
+}
+
+@media (max-width: 576px) {
+    .btn-group .btn {
+        font-size: 0.75rem;
+        padding: 0.3rem 0.5rem;
+    }
+    
+    .card-header h6 {
+        font-size: 0.9rem;
+    }
+    
+    #canvasContainer {
+        height: 250px !important;
+    }
+}
+
+/* ================================
+   ANIMAZIONI
+   ================================ */
+
+.fade-in {
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.slide-up {
+    animation: slideUp 0.4s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ================================
+   STATI INTERATTIVI
+   ================================ */
+
+.btn {
+    transition: all 0.2s ease;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+.form-control, .form-select {
+    transition: all 0.2s ease;
+}
+
+.form-control:focus, .form-select:focus {
+    transform: scale(1.02);
+}
+
+/* ================================
+   SCROLLBAR PERSONALIZZATA
+   ================================ */
+
+.modal-body::-webkit-scrollbar,
+.table-responsive::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.modal-body::-webkit-scrollbar-track,
+.table-responsive::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.modal-body::-webkit-scrollbar-thumb,
+.table-responsive::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover,
+.table-responsive::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* ================================
+   UTILITIES
+   ================================ */
+
+.text-truncate-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.shadow-soft {
+    box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08) !important;
+}
+
+.border-rounded {
+    border-radius: 10px !important;
+}
+
+.bg-gradient-primary {
+    background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%) !important;
+}
+
+.bg-gradient-success {
+    background: linear-gradient(135deg, #198754 0%, #146c43 100%) !important;
+}
+
+.bg-gradient-info {
+    background: linear-gradient(135deg, #0dcaf0 0%, #087990 100%) !important;
+}
+
+/* ================================
+   PRINT STYLES
+   ================================ */
+
+@media print {
+    .modal-header,
+    .modal-footer,
+    .btn,
+    .no-print {
+        display: none !important;
+    }
+    
+    .modal-body {
+        max-height: none !important;
+        overflow: visible !important;
+    }
+    
+    .card {
+        border: 1px solid #000 !important;
+        box-shadow: none !important;
+        break-inside: avoid;
+    }
+}
+
+.traffic-indicator {
+    position: sticky;
+    top: 10px;
+    z-index: 1020;
+    max-width: 300px;
+}
+
+.traffic-indicator .card {
+    transition: all 0.3s ease;
+}
+
+.traffic-indicator .card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+}
+
+.progress {
+    transition: all 0.5s ease;
+}
+
+@media (max-width: 768px) {
+    .traffic-indicator {
+        position: static;
+        max-width: 100%;
+    }
+}

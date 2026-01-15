@@ -1,0 +1,234 @@
+/* ================================================
+   MAP COMMON STYLES - Stili condivisi per mappe
+   ================================================ */
+
+/* === DIPENDENZE LEAFLET === */
+/* Questi devono essere inclusi nei template prima di questo file:
+   - https://unpkg.com/leaflet@1.9.4/dist/leaflet.css
+   - https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css
+   - https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css
+*/
+
+/* === STILI MARKER PER ACQUISITION TYPE === */
+.item-marker-continuous,
+.channel-marker-continuous,
+.parameter-marker-continuous {
+    background-color: #198754; /* Verde per continui */
+}
+
+.item-marker-discrete,
+.channel-marker-discrete,
+.parameter-marker-discrete {
+    background-color: #ffc107; /* Giallo per discreti */
+}
+
+.item-marker-periodic,
+.channel-marker-periodic,
+.parameter-marker-periodic {
+    background-color: #0dcaf0; /* Ciano per periodici */
+}
+
+.item-marker-undefined,
+.channel-marker-undefined,
+.parameter-marker-undefined {
+    background-color: #6c757d; /* Grigio per non definiti */
+}
+
+/* === STILI POPUP COMUNI === */
+.leaflet-popup .popup-header {
+    font-weight: bold;
+    color: #0d6efd;
+    margin-bottom: 5px;
+}
+
+.leaflet-popup .popup-badges {
+    margin: 5px 0;
+}
+
+.leaflet-popup .popup-actions {
+    margin-top: 10px;
+    text-align: center;
+}
+
+/* Popup personalizzati per multi-entity */
+.custom-popup.multi-item-popup,
+.custom-popup.multi-channel-popup,
+.custom-popup.multi-parameter-popup {
+    min-width: 350px;
+}
+
+/* === MODIFICHE PER EFFETTO LIQUID GLASS SUI POPUP === */
+.custom-popup {
+    /* Le proprietà "liquid glass" sono definite su .leaflet-popup-content-wrapper */
+    border-radius: 15px !important;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}
+.leaflet-popup-content-wrapper {
+    background-color: rgba(255, 255, 255, 0.95) !important; /* Da 0.5 a 0.95 */
+    backdrop-filter: blur(8px) !important; /* Da 10px a 8px */
+    border: 1px solid rgba(255, 255, 255, 0.8) !important; /* Da 0.3 a 0.8 */
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15) !important; /* Ombra per definizione */
+}
+
+.leaflet-popup-tip {
+    /* Rende trasparente la punta del popup per coerenza */
+    background: transparent !important;
+}
+
+
+/* === STILI CLUSTER PERSONALIZZATI === */
+.custom-cluster-icon {
+    background: transparent !important;
+    border: none !important;
+}
+
+.cluster-marker {
+    position: relative;
+    animation: pulse-cluster 2s infinite;
+    transition: all 0.3s ease;
+}
+
+.cluster-marker:hover {
+    transform: scale(1.1);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.6) !important;
+}
+
+/* Classi per diverse dimensioni cluster */
+.cluster-small {
+    border-width: 2px !important;
+}
+
+.cluster-medium {
+    border-width: 3px !important;
+}
+
+.cluster-large {
+    border-width: 4px !important;
+}
+
+.cluster-xlarge {
+    border-width: 4px !important;
+}
+
+.cluster-huge {
+    border-width: 5px !important;
+}
+
+/* === ANIMAZIONI === */
+@keyframes pulse-cluster {
+    0% {
+        box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+    }
+    50% {
+        box-shadow: 0 3px 8px rgba(0,0,0,0.4), 0 0 0 8px rgba(255,255,255,0.1);
+    }
+    100% {
+        box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+    }
+}
+
+/* Override stili default del cluster per transizioni smooth */
+.leaflet-cluster-anim .leaflet-marker-icon, 
+.leaflet-cluster-anim .leaflet-marker-shadow {
+    transition: transform 0.3s ease-out, opacity 0.3s ease-in;
+}
+
+/* === EFFETTI VISIVI AVANZATI === */
+/* Migliora visibilità cluster su diversi sfondi */
+.cluster-marker::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.3);
+    z-index: -1;
+}
+
+/* === STILI MAPPA CONTAINER === */
+.map-loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255,255,255,0.9);
+    z-index: 1000;
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 768px) {
+    .cluster-marker {
+        transform: scale(0.8);
+    }
+    
+    .leaflet-popup .popup-actions {
+        text-align: center;
+    }
+    
+    .custom-popup.multi-item-popup,
+    .custom-popup.multi-channel-popup,
+    .custom-popup.multi-parameter-popup {
+        min-width: 280px;
+    }
+}
+
+/* === MODIFICHE PER EFFETTO LIQUID GLASS SUI CLUSTER === */
+.marker-cluster {
+    background: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 50%;
+    color: white;
+    font-weight: bold;
+    text-align: center;
+    font-size: 12px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+/* Per mantenere i colori originali, modifichiamo solo lo sfondo dei div interni */
+.marker-cluster div {
+    background: transparent;
+    border-radius: 50%;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Per mantenere i colori originali, applichiamo lo sfondo direttamente al div interno */
+.marker-cluster-small > div {
+    background: linear-gradient(45deg, #28a745, #1e7e34);
+}
+
+.marker-cluster-medium > div {
+    background: linear-gradient(45deg, #ffc107, #e0a800);
+}
+
+.marker-cluster-large > div {
+    background: linear-gradient(45deg, #dc3545, #bd2130);
+}
+
+/* === UTILITY CLASSES === */
+.map-controls {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+}
+
+.map-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.map-counter {
+    font-weight: bold;
+    margin-left: 0.5rem;
+}

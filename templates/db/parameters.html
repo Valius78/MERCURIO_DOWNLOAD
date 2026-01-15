@@ -1,0 +1,863 @@
+{% extends "base.html" %}
+
+{% block head %}
+    {{ super() }}
+   
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.1/dist/chartjs-adapter-moment.min.js"></script>
+    <!--<script src="{{ url_for('static', filename='js/readings_visualizer.js') }}"></script>-->
+
+{% endblock %}
+
+{% block title %}Gestione Parameters{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+		<div class="col">
+			<h1><i class="fas fa-broadcast-tower"></i> Parametri</h1>
+            <p class="text-muted">Parametri misurati dai Canali.</p>
+		</div>
+		<div class="col-auto">
+			<div class="btn-group" role="group">
+		
+				<button class="btn btn-outline-secondary" onclick="toggleMapView()">
+					<i class="fas fa-globe"></i> Vista Mappa
+				</button>
+			</div>
+		</div>
+	</div>
+    <!-- Statistiche rapide  -->
+    <div class="stats-row mb-4">
+    
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center text-white">
+                <i class="fas fa-broadcast-tower fa-2x text-white mb-2"></i>
+                <h3>{{ parameters|length }}</h3>
+                <small>Parametri Totali</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center text-white">
+                <i class="fas fa-database fa-2x text-white mb-2"></i>
+                <h3>{{ parameters|selectattr('data_type', 'equalto', 'numeric')|list|length }}</h3>
+                <small>Numerici</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center text-white">
+                <i class="fas fa-map-marker-alt fa-2x text-white mb-2"></i>
+                <h3>{{ parameters|selectattr('longitude')|list|length }}</h3>
+                <small>Con Posizione</small>
+            </div>
+        </div>
+    </div>
+
+</div>
+    <!-- Filtri  -->
+    <div class="row mb-4">
+		<div class="col-12">
+			<div class="card">
+				<div class="card-body">
+					<div class="row g-3">
+						<div class="col-md-3">
+							<label class="form-label">Ricerca</label>
+							<input type="text" id="searchParameters" class="form-control" 
+								   placeholder="Nome, descrizione, codice...">
+						</div>
+						<div class="col-md-2">
+							<label class="form-label">Scenari</label>
+							<select id="filterScenario" class="form-select">
+								<option value="">Tutti</option>
+								{% if filter_options and filter_options.scenarios %}
+								{% for scenario in filter_options.scenarios %}
+								<option value="{{ scenario.name }}">{{ scenario.name }}</option>
+								{% endfor %}
+								{% endif %}
+							</select>
+						</div>
+						<div class="col-md-2">
+							<label class="form-label">Aree</label>
+							<select id="filterArea" class="form-select">
+								<option value="">Tutte</option>
+								{% if filter_options and filter_options.areas %}
+								{% for area in filter_options.areas %}
+								<option value="{{ area.name }}">{{ area.name }}</option>
+								{% endfor %}
+								{% endif %}
+							</select>
+						</div>
+						<div class="col-md-2">
+							<label class="form-label">Items</label>
+							<select id="filterItem" class="form-select">
+								<option value="">Tutti</option>
+								{% if filter_options and filter_options.item_list %}
+								{% for item in filter_options.item_list %}
+								<option value="{{ item.item_id }}">{{ item.name }} ({{ item.code }})</option>
+								{% endfor %}
+								{% endif %}
+							</select>
+						</div>
+						<div class="col-md-3">
+							<label class="form-label">Canali</label>
+							<select id="filterChannel" class="form-select">
+								<option value="">Tutti</option>
+								{% if filter_options and filter_options.channel_list %}
+								{% for channel in filter_options.channel_list %}
+								<option value="{{ channel.channel_id }}">{{ channel.name }} ({{ channel.code }})</option>
+								{% endfor %}
+								{% endif %}
+							</select>
+						</div>
+						<button id="resetFiltersBtn" class="btn btn-outline-secondary">
+							<i class="fas fa-undo"></i> Reset Filtri
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div id="mapView" class="card mb-4" style="display: none;">
+		<div class="card-header d-flex justify-content-between align-items-center">
+			<h5 class="mb-0">
+				<i class="fas fa-map"></i> Mappa Parameters 
+				<span class="badge bg-primary" id="mapParametersCount">{{ parameters|length }}</span>
+			</h5>
+			<div>
+				<div class="btn-group btn-group-sm me-2" role="group">
+					<button type="button" class="btn btn-outline-secondary" onclick="fitAllParameters()">
+						<i class="fas fa-expand-arrows-alt"></i> Mostra Tutti
+					</button>
+					<button type="button" class="btn btn-outline-info" onclick="centerOnItaly()">
+						<i class="fas fa-home"></i> Italia
+					</button>
+					<button type="button" class="btn btn-outline-primary" onclick="toggleMapStyle()">
+						<i class="fas fa-layer-group"></i> Stile
+					</button>
+				</div>
+				<button type="button" class="btn btn-outline-danger btn-sm" onclick="toggleMapView()">
+					<i class="fas fa-times"></i> Chiudi
+				</button>
+			</div>
+		</div>
+		<div class="card-body p-0">
+			<div id="parametersMap" style="height: 500px; position: relative;">
+				<div id="mapLoadingOverlay" class="d-flex align-items-center justify-content-center h-100 bg-light">
+					<div class="text-center">
+						<i class="fas fa-spinner fa-spin fa-2x text-primary mb-2"></i>
+						<p class="text-muted">Caricamento mappa...</p>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="card-footer">
+			<div class="row">
+				<div class="col-md-8">
+					<div class="d-flex flex-wrap gap-2">
+						<small class="badge bg-success"><i class="fas fa-circle"></i> Continui</small>
+						<small class="badge bg-warning"><i class="fas fa-circle"></i> Discreti</small>
+						<small class="badge bg-info"><i class="fas fa-circle"></i> Periodici</small>
+						<small class="badge bg-secondary"><i class="fas fa-circle"></i> Non Definiti</small>
+					</div>
+				</div>
+				<div class="col-md-4 text-end">
+					<small class="text-muted">
+						Clicca sui marker per vedere i dettagli
+					</small>
+				</div>
+			</div>
+		</div>
+	</div>
+
+    {% if stats %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Distribuzione per Tipo Dato</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for stat in stats %}
+                        <div class="col-md-2 mb-3">
+                            <div class="text-center">
+                                <div class="badge bg-primary fs-6 mb-1">{{ stat.data_type }}</div>
+                                <div><strong>{{ stat.count }}</strong> parameters</div>
+                                <small class="text-muted">
+                                    {{ stat.continuous_count }} continui, 
+                                    {{ stat.discrete_count }} discreti
+                                </small>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if parameters %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+					 <h5 class="mb-0">
+						<i class="fas fa-list"></i> Lista Parametri 
+						<span class="badge bg-secondary" id="listParametersCount">{{ parameters|length }}</span>
+					</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Parametro</th>
+                                    <th>Canale</th>
+                                    <th>Configurazione</th>
+                                    <th>Posizione</th>
+                                    <th>Data</th>
+                                    <th>Azioni</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+								{% for parameter in parameters %}
+								<tr data-scenario="{{ parameter.scenario_name or '' }}"
+									data-area="{{ parameter.area_name or '' }}"
+									data-channel="{{ parameter.channel_id or '' }}"
+									data-item="{{ parameter.item_id or '' }}"
+									data-search="{{ (parameter.name|lower) + ' ' + (parameter.description|lower if parameter.description else '') + ' ' + (parameter.code|lower if parameter.code else '') }}">
+									<td>
+										<div class="d-flex align-items-center">
+											<div class="me-3">
+												<i class="fas fa-broadcast-tower text-primary" title="Parameter"></i>
+											</div>
+											<div>
+												<strong>{{ parameter.name }}</strong>
+												<br>
+												<code class="badge bg-dark">{{ parameter.code }}</code>
+												{% if parameter.description %}
+												<br><small class="text-muted">{{ parameter.description[:50] }}{% if parameter.description|length > 50 %}...{% endif %}</small>
+												{% endif %}
+											</div>
+										</div>
+									</td>
+									
+									<td>
+										<div>
+											<strong>{{ parameter.channel_name or 'N/A' }}</strong>
+											{% if parameter.channel_code %}
+											<br><code class="text-muted">{{ parameter.channel_code }}</code>
+											{% endif %}
+											{% if parameter.area_name %}
+											<br><small class="text-muted">
+												<i class="fas fa-map"></i> {{ parameter.scenario_name }}/{{ parameter.area_name }}
+											</small>
+											{% endif %}
+											{% if parameter.item_name %}
+											<br><small class="text-info">
+												<i class="fas fa-cube"></i> {{ parameter.item_name }}
+											</small>
+											{% endif %}
+										</div>
+									</td>
+
+                                    <td>
+										<div>
+											<span class="badge bg-info">{{ parameter.data_type or 'numeric' }}</span>
+											{% if parameter.unit %}
+											<br><small><i class="fas fa-ruler"></i> {{ parameter.unit }}</small>
+											{% endif %}
+											<br>
+										</div>
+									</td>
+
+                                    <td>
+										{% if parameter.longitude and parameter.latitude %}
+										<small>
+											<i class="fas fa-globe"></i>
+											{{ "%.6f"|format(parameter.longitude) }},<br>
+											{{ "%.6f"|format(parameter.latitude) }}
+										</small>
+										{% else %}
+										<span class="text-muted">Non definita</span>
+										{% endif %}
+									</td>
+
+                                    <td>
+                                        {% if parameter.created_at %}
+                                        <small class="text-muted">
+                                            <span class="timestamp-utc" data-timestamp="{{ parameter.created_at.isoformat() }}">
+                                                {{ parameter.created_at.strftime('%d/%m/%Y %H:%M') }}
+                                            </span>
+                                        </small>
+                                        {% else %}
+                                        <small class="text-muted">N/A</small>
+                                        {% endif %}
+                                    </td>
+
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{{ url_for('parameters.edit_parameter', parameter_id=parameter.parameter_id) }}" 
+                                               class="btn btn-outline-primary" title="Dettagli">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+											
+                                            
+                                            
+                                      
+                                            <button class="btn btn-outline-info" 
+                                                    onclick="showMetadata('{{ parameter.parameter_id }}', '{{ parameter.name }}')" 
+                                                    title="Visualizza metadata">
+                                                <i class="fas fa-tags"></i>
+                                            </button>
+											<button type="button" 
+													class="btn btn-outline-success" 
+													title="Visualizza Dati"
+													onclick="showParameterData({{ parameter.parameter_id }}, '{{ parameter.name|replace("'", "\\'") }}')">
+												<i class="fas fa-chart-line"></i>
+											</button>
+                                  
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <div class="text-center py-5">
+        <div class="card">
+            <div class="card-body">
+                <i class="fas fa-broadcast-tower fa-4x text-muted mb-3"></i>
+                <h4 class="text-muted">Nessun Parameter Configurato</h4>
+                <p class="text-muted">
+                    {% if item_filter %}
+                    Nessun parameter trovato per questo item
+                    {% else %}
+                    Inizia creando il primo parameter per un item esistente
+                    {% endif %}
+                </p>
+                <div class="mt-3">
+                    <a href="{{ url_for('parameters.new_parameter', item=item_filter if item_filter else '') }}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Crea Primo Parameter
+                    </a>
+                </div>
+                <div class="mt-3">
+                    <small class="text-muted">
+                        <strong>Prerequisiti:</strong> Assicurati di aver creato almeno un Item prima di creare parameters.
+                        <br>
+                        <a href="{{ url_for('items.items') }}" class="text-decoration-none">Vai agli Items →</a>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Conferma Eliminazione</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Sei sicuro di voler eliminare il parameter <strong id="deleteParameterName"></strong>?</p>
+                <p class="text-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Attenzione:</strong> Questa azione non può essere annullata.
+                </p>
+                <p id="readingsCountMessage" class="text-danger fw-bold">
+                    <i class="fas fa-trash-alt"></i> Caricamento conteggio...
+                </p>
+                
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <form id="deleteForm" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash"></i> Elimina Parameter
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="metadataModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-tags"></i> Metadata Parameter: <span id="metadataParameterName"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="metadataContent" class="bg-light p-3 rounded"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentFilteredParameters = {{ parameters|tojson|safe }};
+
+// Conferma eliminazione
+function confirmDelete(parameterId, parameterName) {
+    document.getElementById('deleteParameterName').textContent = parameterName;
+    document.getElementById('deleteForm').action = '/parameters/delete/' + parameterId;
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+
+// Visualizza metadata
+function showMetadata(parameterId, parameterName) {
+    console.log('=== DEBUG SHOWMETADATA ===');
+    console.log('Parameter ID:', parameterId, typeof parameterId);
+    
+    // ⬇️ CONVERTI IN NUMERO per il confronto
+    const paramId = parseInt(parameterId);
+    console.log('Parameter ID convertito:', paramId);
+    
+    const parameter = currentFilteredParameters.find(p => p.parameter_id === paramId);
+    console.log('Parameter trovato:', parameter);
+    
+    if (parameter && parameter.metadata) {
+        console.log('Metadata trovati:', parameter.metadata);
+        let metadata = parameter.metadata;
+        if (typeof metadata === 'string') {
+            try { metadata = JSON.parse(metadata); } catch(e) { console.log('Errore parse:', e); }
+        }
+        document.getElementById('metadataContent').textContent = JSON.stringify(metadata, null, 2);
+    } else {
+        console.log('PROBLEMA: parameter non trovato o metadata mancanti');
+        document.getElementById('metadataContent').textContent = 'Nessun metadata disponibile';
+    }
+    
+    document.getElementById('metadataParameterName').textContent = parameterName;
+    new bootstrap.Modal(document.getElementById('metadataModal')).show();
+}
+
+
+// === FILTRI DINAMICI E STATICI UNIFICATI ===
+document.addEventListener('DOMContentLoaded', function() {
+    const filterRelations = {{ filter_relations | tojson | safe }};
+
+    const scenarioSelect = document.getElementById('filterScenario');
+    const areaSelect = document.getElementById('filterArea');
+    const itemSelect = document.getElementById('filterItem');
+    const channelSelect = document.getElementById('filterChannel');
+    const searchField = document.getElementById('searchParameters');
+	
+	console.log('=== ARRAY PARAMETERS CARICATO ===');
+	console.log({{ parameters|tojson|safe }});
+
+    // Funzione per aggiornare le opzioni di un select
+    function updateSelectOptions(selectElement, options, valueKey, textKey, keepValue = true) {
+        const currentValue = selectElement.value;
+        const firstOption = selectElement.options[0];
+        selectElement.innerHTML = '';
+        selectElement.appendChild(firstOption);
+
+        const uniqueOptions = new Map();
+        options.forEach(option => {
+            const value = option[valueKey];
+            const text = option[textKey];
+            if (value && text && !uniqueOptions.has(value)) {
+                uniqueOptions.set(value, text);
+            }
+        });
+
+        uniqueOptions.forEach((text, value) => {
+            const optionElement = document.createElement('option');
+            optionElement.value = value;
+            optionElement.textContent = text;
+            selectElement.appendChild(optionElement);
+        });
+
+        if (keepValue && currentValue && Array.from(selectElement.options).some(opt => opt.value === currentValue)) {
+            selectElement.value = currentValue;
+        } else {
+            selectElement.value = '';
+        }
+    }
+
+    // Funzione per aggiornare tutti i filtri in base allo stato corrente
+    function updateAllFilters(isReset = false) {
+        const selectedScenario = scenarioSelect.value;
+        const selectedArea = areaSelect.value;
+        const selectedItem = itemSelect.value;
+        const selectedChannel = channelSelect.value;
+
+        const filteredRelations = filterRelations.filter(relation => {
+            return (!selectedScenario || relation.scenario_name === selectedScenario) &&
+                   (!selectedArea || relation.area_name === selectedArea) &&
+                   (!selectedItem || relation.item_id.toString() === selectedItem) &&
+                   (!selectedChannel || relation.channel_id.toString() === selectedChannel);
+        });
+
+        const areas = filteredRelations.map(r => ({ name: r.area_name, display: r.area_name }));
+        updateSelectOptions(areaSelect, areas, 'name', 'display', !isReset);
+
+        const items = filteredRelations.map(r => ({ item_id: r.item_id, display: `${r.item_name} (${r.item_code})` }));
+        updateSelectOptions(itemSelect, items, 'item_id', 'display', !isReset);
+
+        const channels = filteredRelations.map(r => ({ channel_id: r.channel_id, display: `${r.channel_name} (${r.channel_code})` }));
+        updateSelectOptions(channelSelect, channels, 'channel_id', 'display', !isReset);
+
+        applyFilters();
+    }
+
+    // Funzione per applicare i filtri alla tabella e aggiornare mappa
+    function applyFilters() {
+        const search = searchField.value.toLowerCase();
+        const scenario = scenarioSelect.value;
+        const area = areaSelect.value;
+        const channel = channelSelect.value;
+        const item = itemSelect.value;
+
+        const rows = document.querySelectorAll('tbody tr[data-scenario]');
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            const rowScenario = row.dataset.scenario || '';
+            const rowArea = row.dataset.area || '';
+            const rowChannel = row.dataset.channel || '';
+            const rowItem = row.dataset.item || '';
+            const rowSearch = row.dataset.search || '';
+
+            const matchesSearch = !search || rowSearch.includes(search);
+            const matchesScenario = !scenario || rowScenario === scenario;
+            const matchesArea = !area || rowArea === area;
+            const matchesChannel = !channel || rowChannel === channel;
+            const matchesItem = !item || rowItem === item;
+
+            if (matchesSearch && matchesScenario && matchesArea && matchesChannel && matchesItem) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        const listCounter = document.getElementById('listParametersCount');
+        if (listCounter) {
+            listCounter.textContent = visibleCount;
+        }
+
+        // aggiorna array filtrato per la mappa
+        currentFilteredParameters = {{ parameters|tojson|safe }}.filter(parameter => {
+            const searchContent = `${parameter.name} ${parameter.description || ''} ${parameter.code || ''}`.toLowerCase();
+            const scenarioVal = parameter.scenario_name || '';
+            const areaVal = parameter.area_name || '';
+            const channelVal = parameter.channel_id ? parameter.channel_id.toString() : '';
+            const itemVal = parameter.item_id ? parameter.item_id.toString() : '';
+
+            const matchesSearch = !search || searchContent.includes(search);
+            const matchesScenario = !scenario || scenarioVal === scenario;
+            const matchesArea = !area || areaVal === area;
+            const matchesChannel = !channel || channelVal === channel;
+            const matchesItem = !item || itemVal === item;
+
+            return matchesSearch && matchesScenario && matchesArea && matchesChannel && matchesItem;
+        });
+
+        // Aggiorna la mappa se visibile
+        const mapView = document.getElementById('mapView');
+        if (mapView && mapView.style.display !== 'none' && typeof window.updateParametersMapView === 'function') {
+            window.updateParametersMapView();
+        }
+    }
+
+    // Funzione per il reset completo dei filtri
+    function resetAllFilters() {
+        searchField.value = '';
+        scenarioSelect.value = '';
+        areaSelect.value = '';
+        channelSelect.value = '';
+        itemSelect.value = '';
+
+        // aggiorna filtri senza mantenere i valori precedenti
+        updateAllFilters(true);
+
+        // Se c'è una mappa visibile, aggiorna anche quella
+        const mapView = document.getElementById('mapView');
+        if (mapView && mapView.style.display !== 'none' && typeof window.updateParametersMapView === 'function') {
+            window.updateParametersMapView();
+        }
+    }
+
+    // Event listener per il pulsante reset
+    const resetBtn = document.getElementById('resetFiltersBtn');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', resetAllFilters);
+    }
+
+    // Event listeners per i filtri
+    scenarioSelect.addEventListener('change', () => updateAllFilters(false));
+    areaSelect.addEventListener('change', () => updateAllFilters(false));
+    itemSelect.addEventListener('change', () => updateAllFilters(false));
+    channelSelect.addEventListener('change', () => updateAllFilters(false));
+    searchField.addEventListener('input', applyFilters);
+
+    // Espone funzioni globali
+    window.applyFilters = applyFilters;
+    window.updateAllFilters = updateAllFilters;
+    
+    // JS per convertire timestamp-utc in ora locale (come da istruzioni Dashboard Punto 2)
+    document.querySelectorAll('.timestamp-utc').forEach(el => {
+        const utcTimestamp = el.getAttribute('data-timestamp');
+        const date = new Date(utcTimestamp);
+        // Usa toLocaleString con timeZone per formattazione localizzata
+        el.textContent = date.toLocaleString('it-IT', {
+            timeZone: 'Europe/Rome',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    });
+});
+</script>
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+<link rel="stylesheet" href="{{ url_for('static', filename='css/map-common.css') }}" />
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/readings_visualizer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/map-common.js') }}"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+<script>
+window.ParametersMap = window.ParametersMap || {
+    map: null,
+    markersCluster: null,
+    parameterMarkers: [],
+    currentFilteredParameters: {{ parameters|tojson|safe }},
+    parametersConfig: {
+        entityType: 'parameter',
+        entitiesProperty: 'parameters',
+        markerPrefix: 'parameter-marker',
+        mapContainerId: 'parametersMap',
+        loadingOverlayId: 'mapLoadingOverlay',
+        counterElementId: 'mapParametersCount',
+        listCounterElementId: 'listParametersCount',
+        defaultColor: '#0dcaf0',
+        popupBuilder: {
+            single: function(parameter) {
+                return `
+                    <div class="popup-content">
+                        <div class="popup-header">
+                            <i class="fas fa-broadcast-tower"></i> ${parameter.name}
+                        </div>
+                        <div class="popup-badges">
+                            <span class="badge bg-primary">${parameter.code || parameter.parameter_id}</span>
+                            ${parameter.acquisition_type ? `<span class="badge bg-${parameter.acquisition_type==='continuous'?'success':parameter.acquisition_type==='discrete'?'warning':'info'}">${parameter.acquisition_type}</span>` : ''}
+                        </div>
+                        <div class="small mb-2">
+                            <div><strong>Scenario:</strong> ${parameter.scenario_name || 'N/A'}</div>
+                            <div><strong>Area:</strong> ${parameter.area_name || 'N/A'}</div>
+                            <div><strong>Item:</strong> ${parameter.item_name || 'N/A'}</div>
+                            <div><strong>Channel:</strong> ${parameter.channel_name || 'N/A'}</div>
+                            ${parameter.unit ? `<div><strong>Unità:</strong> ${parameter.unit}</div>` : ''}
+                            <div><strong>Tipo Dato:</strong> ${parameter.data_type || 'N/A'}</div>
+                        </div>
+                        <div class="popup-actions">
+                            <a href="/parameters/edit/${parameter.parameter_id}" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-edit"></i> Dettagli
+                            </a>
+                        </div>
+                    </div>
+                `;
+            },
+            multi: function(parameters) {
+                const parametersList = parameters.map(p => `
+                    <div class="border-bottom py-2">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <strong>${p.name}</strong>
+                                <br><span class="badge bg-primary">${p.code || p.parameter_id}</span>
+                                <br><small class="text-muted">${p.item_name || 'N/A'} • ${p.data_type || 'N/A'}</small>
+                            </div>
+                            <div class="text-end">
+                                <a href="/parameters/edit/${p.parameter_id}" class="btn btn-xs btn-outline-primary">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                return `
+                    <div class="popup-content">
+                        <div class="popup-header text-center">
+                            <i class="fas fa-layer-group"></i> ${parameters.length} parametri in questa posizione
+                        </div>
+                        <div style="max-height:200px; overflow-y:auto;">
+                            ${parametersList}
+                        </div>
+                        <div class="popup-actions mt-2">
+                            <small class="text-muted">Parameters con coordinate identiche o molto vicine</small>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+    }
+};
+
+// ==================================================
+// MODALI
+// ==================================================
+function confirmDelete(parameterId, parameterName) {
+    const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    
+    document.getElementById('deleteParameterName').textContent = parameterName;
+    document.getElementById('deleteForm').action = '/parameters/delete/' + parameterId;
+    
+    const countMessageEl = document.getElementById('readingsCountMessage');
+    countMessageEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Caricamento conteggio...';
+    deleteModal.show();
+
+    // Chiama l'API per ottenere il conteggio dei readings
+    fetch(`/api/parameter/${parameterId}/readings_count`)
+        .then(response => response.json())
+        .then(data => {
+            const count = data.count || 0;
+            let message = '';
+
+            if (count > 0) {
+                message = `Verranno eliminati **${count}** record di letture (readings) associati. **Questa perdita di dati è irreversibile.**`;
+            } else if (count === 0) {
+                message = `Nessuna lettura (reading) associata trovata. Sarà eliminato solo il parameter.`;
+            } else {
+                message = 'Errore nel recupero del conteggio dei readings.';
+            }
+
+            // Aggiorna il messaggio nel modale
+            countMessageEl.innerHTML = `<i class="fas fa-trash-alt"></i> ${message}`;
+
+        })
+        .catch(error => {
+            console.error('Errore API readings count:', error);
+            countMessageEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Errore nel recupero del conteggio dei readings.';
+        });
+}
+
+
+// ==================================================
+// MAPPA
+// ==================================================
+function toggleMapView() {
+    const mapView = document.getElementById('mapView');
+
+    if (mapView.style.display === 'none') {
+        // Assicura che currentFilteredParameters sia allineato ai select/ricerca correnti
+        if (typeof window.applyFilters === 'function') window.applyFilters();
+
+        mapView.style.display = 'block';
+        mapView.scrollIntoView({ behavior:'smooth', block:'start' });
+
+        if (!window.ParametersMap.map) {
+            // Inizializza e subito dopo ricarica i marker con il dataset filtrato
+            setTimeout(async () => {
+                await initializeParametersMap();
+                if (typeof window.updateParametersMapView === 'function') {
+                    window.updateParametersMapView();
+                }
+            }, 0);
+        } else {
+            setTimeout(() => {
+                window.ParametersMap.map.invalidateSize();
+
+                // Ridisegna SEMPRE coi filtrati quando si apre
+                if (typeof window.updateParametersMapView === 'function') {
+                    window.updateParametersMapView();
+                }
+
+                if (window.ParametersMap.markersCluster && window.ParametersMap.markersCluster.getLayers().length > 0) {
+                    window.ParametersMap.map.fitBounds(
+                        window.ParametersMap.markersCluster.getBounds(),
+                        { padding: [20, 20] }
+                    );
+                }
+            }, 100);
+        }
+    } else {
+        mapView.style.display = 'none';
+    }
+}
+
+async function initializeParametersMap() {
+    try {
+        const result = await window.MapCommon.initializeEntityMap(window.ParametersMap.parametersConfig);
+        window.ParametersMap.map = result.map;
+        window.ParametersMap.markersCluster = result.markersCluster;
+        window.ParametersMap.parametersConfig.mapInstance = window.ParametersMap.map;
+
+        await window.MapCommon.loadEntitiesOnMap(currentFilteredParameters,
+            window.ParametersMap.parametersConfig,
+            window.ParametersMap.markersCluster,
+            window.ParametersMap.parameterMarkers);
+
+        if(window.ParametersMap.parameterMarkers.length>0) fitAllParameters();
+    } catch(e){
+        console.error('Errore inizializzazione mappa parameters:',e);
+    }
+}
+
+function fitAllParameters(){ window.MapCommon.fitAllEntities(window.ParametersMap.map, window.ParametersMap.markersCluster); }
+function centerOnItaly(){ window.MapCommon.centerOnItaly(window.ParametersMap.map); }
+function toggleMapStyle(){ window.MapCommon.toggleMapStyle(window.ParametersMap.map); }
+
+function updateParametersMapView(){ 
+    if (window.ParametersMap.map && window.ParametersMap.markersCluster) {
+        window.MapCommon.loadEntitiesOnMap(currentFilteredParameters, 
+            window.ParametersMap.parametersConfig, 
+            window.ParametersMap.markersCluster, 
+            window.ParametersMap.parameterMarkers);
+        
+        // Aggiorna il contatore della mappa
+        const mapCounter = document.getElementById('mapParametersCount');
+        if (mapCounter) {
+            mapCounter.textContent = currentFilteredParameters.length;
+        }
+    }
+}
+
+// Esporta funzioni globali
+window.toggleMapView = toggleMapView;
+window.fitAllParameters = fitAllParameters;
+window.centerOnItaly = centerOnItaly;
+window.updateParametersMapView = updateParametersMapView;
+window.toggleMapStyle = toggleMapStyle;
+window.confirmDelete = confirmDelete;
+window.showMetadata = showMetadata;
+</script>
+
+{% endblock %}
+{% endblock %}

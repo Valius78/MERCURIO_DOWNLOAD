@@ -1,0 +1,574 @@
+{% extends "base.html" %}
+
+{% block head %}
+    {{ super() }}
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        #parameterMap {
+            height: 350px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+        }
+        .coordinate-input {
+            font-family: monospace;
+        }
+    </style>
+{% endblock %}
+
+
+{% block title %}
+{% if action == 'new' %}Parametro{% else %}Parametro{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1>
+            <i class="fas fa-{{ 'edit' if action == 'edit' else 'plus' }}"></i>
+            Parametro
+        </h1>
+        <p class="text-muted">
+                Informazioni del parametro di misurazione esistente.
+        </p>
+    </div>
+    <div class="col-auto">
+        <div class="btn-group" role="group" aria-label="Azioni secondarie e lista">
+            <a href="{{ url_for('parameters.parameters') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Torna alla Lista
+            </a>
+        </div>
+    </div>
+</div>
+
+{% if not channels %}
+<div class="alert alert-warning mb-4">
+    <i class="fas fa-exclamation-triangle"></i>
+    <strong>Attenzione:</strong> Nessun canale disponibile. 
+    
+</div>
+{% endif %}
+
+<form method="POST"  id="parameterForm">
+    
+    {% if action == 'edit' %}
+    <input type="hidden" name="parameter_id" value="{{ parameter.parameter_id }}">
+    {% endif %}
+
+    <div class="row">
+        <div class="col-md-12">
+            <fieldset id="formFieldset">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Informazioni Base</h5>
+                </div>
+                <div class="card-body">
+                    
+                    {% if action == 'edit' %}
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label">
+                                <i class="fas fa-map"></i> Scenario
+                            </label>
+                            <input type="text" class="form-control" readonly style="background-color: #f8f9fa;" 
+                                value="{% if parameter %}{{ parameter.scenario_name }}{% endif %}">
+                            
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="form-label">
+                                <i class="fas fa-map-marked-alt"></i> Area
+                            </label>
+                            <input type="text" class="form-control" readonly style="background-color: #f8f9fa;" 
+                                value="{% if parameter %}{{ parameter.area_name }}{% endif %}">
+                            
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="form-label">
+                                <i class="fas fa-cube"></i> Item
+                            </label>
+                            <input type="text" class="form-control" readonly style="background-color: #f8f9fa;" 
+                                value="{% if parameter %}{{ parameter.item_name }}{% endif %}">
+                            
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="form-label">
+                                <i class="fas fa-broadcast-tower"></i> Channel
+                            </label>
+                            <input type="text" class="form-control" readonly style="background-color: #f8f9fa;" 
+                                value="{% if parameter %}{{ parameter.channel_name }} ({{ parameter.channel_code }}){% endif %}">
+                            <input type="hidden" name="channel_id" value="{{ parameter.channel_id if parameter else '' }}">
+                            
+                        </div>
+                    </div>
+
+                    {% else %}
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="scenario_filter" class="form-label">
+                                <i class="fas fa-map"></i> Scenario 
+                            </label>
+                            <select id="scenario_filter" class="form-select" 
+                                    onchange="updateAreasByScenarioParameter()" required>
+                                <option value="">-- Seleziona Scenario --</option>
+                                {% for scenario in scenarios %}
+                                <option value="{{ scenario.scenario_id }}">
+                                    {{ scenario.name }} ({{ scenario.code }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Filtra per scenario</div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="area_filter" class="form-label">
+                                <i class="fas fa-map-marked-alt"></i> Area 
+                            </label>
+                            <select id="area_filter" class="form-select" 
+                                    onchange="updateItemsByAreaParameter()" required>
+                                <option value="">-- Prima seleziona Scenario --</option>
+                            </select>
+                            <div class="form-text">Filtra per area</div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="item_filter" class="form-label">
+                                <i class="fas fa-cube"></i> Item 
+                            </label>
+                            <select id="item_filter" class="form-select" 
+                                    onchange="updateChannelsByItemParameter()" required>
+                                <option value="">-- Prima seleziona Area --</option>
+                            </select>
+                            <div class="form-text">Filtra per item</div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="channel_id" class="form-label">
+                                <i class="fas fa-broadcast-tower"></i> Canale 
+                            </label>
+                            <select name="channel_id" id="channel_id" class="form-select" required onchange="updateChannelCodePrefix()">
+                                <option value="">-- Prima seleziona Item --</option>
+                            </select>
+                            <div class="form-text">Canale di appartenenza (filtrato)</div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="name" class="form-label">
+                                <i class="fas fa-tag"></i> Nome Parametro 
+                            </label>
+                            <input type="text" name="name" id="name" class="form-control" 
+                                value="{{ parameter.name if parameter else '' }}" 
+                                required maxlength="200" 
+                                placeholder="es: Water Content, Temperature Max">
+                           
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="code" class="form-label">
+                                <i class="fas fa-barcode"></i> Codice Parametero 
+                            </label>
+                            {% if action == 'edit' %}
+                            <input type="text" class="form-control" readonly style="background-color: #f8f9fa;" 
+                                value="{{ parameter.code if parameter else '' }}">
+                            <input type="hidden" name="code" value="{{ parameter.code if parameter else '' }}">
+                            
+                            {% else %}
+                            <div class="input-group">
+                                <span class="input-group-text bg-light" id="channelCodePrefix">
+                                    Seleziona canale-
+                                </span>
+                                
+                                <input type="text" name="parameter_suffix_alpha" id="parameter_suffix_alpha" class="form-control" 
+                                    required maxlength="5" 
+                                    placeholder="TMP, HUM, VOL..."
+                                    style="text-transform: uppercase; max-width: 80px;">
+                                
+                                <span class="input-group-text">-</span>
+                                
+                                <input type="text" id="parameter_number_display" class="form-control" 
+                                    readonly style="background-color: #f8f9fa; max-width: 60px; text-align: center;"
+                                    placeholder="01">
+
+                                <button type="button" class="btn btn-outline-secondary" onclick="suggestParameterSuffix()" 
+                                        title="Suggerisci codice automatico basato sul nome">
+                                    <i class="fas fa-magic"></i> Suggerisci
+                                </button>
+                            </div>
+                            
+                            <input type="hidden" name="parameter_suffix" id="parameter_suffix">
+                            <input type="hidden" name="code" id="code">
+                            
+                            <div class="form-text">
+                                <strong>Suffisso:</strong> Solo parte alfabetica (es: TMP, HUM, VOL). 
+                                <strong>Numero:</strong> Generato automaticamente.
+                            </div>
+                            
+                            <div id="existingSuffixes" class="mt-2" style="display: none;">
+                                <small class="text-secondary">
+                                    <strong>Suffissi più usati:</strong> 
+                                    <span id="suffixesList" class="font-monospace text-dark bg-light px-2 py-1 rounded"></span>
+                                </small>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <label for="description" class="form-label">
+                                <i class="fas fa-align-left"></i> Descrizione
+                            </label>
+                            <textarea name="description" id="description" class="form-control" rows="3" 
+                                    placeholder="Descrizione dettagliata del parametro, unità di misura, limiti di validità...">{{ parameter.description if parameter else '' }}</textarea>
+                        </div>
+                    </div>
+
+                </div>
+            </div> <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-cogs"></i> Configurazione Misurazione</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <label for="data_type" class="form-label">
+                                <i class="fas fa-database"></i> Tipo Dato 
+                            </label>
+                            <select name="data_type" id="data_type" class="form-select" required>
+                                <option value="numeric" {% if not parameter or parameter.data_type == 'numeric' %}selected{% endif %}>
+                                    Numerico (float/int)
+                                </option>
+                                <option value="text" {% if parameter and parameter.data_type == 'text' %}selected{% endif %}>
+                                    Testo/Stringa
+                                </option>
+                                <option value="url" {% if parameter and parameter.data_type == 'url' %}selected{% endif %}>
+                                    URL/Link
+                                </option>
+                                <option value="path" {% if parameter and parameter.data_type == 'path' %}selected{% endif %}>
+                                    Path/Percorso File
+                                </option>
+                                <option value="boolean" {% if parameter and parameter.data_type == 'boolean' %}selected{% endif %}>
+                                    Booleano (true/false)
+                                </option>
+                                <option value="datetime" {% if parameter and parameter.data_type == 'datetime' %}selected{% endif %}>
+                                    Data/Ora
+                                </option>
+                                <option value="json" {% if parameter and parameter.data_type == 'json' %}selected{% endif %}>
+                                    JSON/Oggetto
+                                </option>
+                                <option value="binary" {% if parameter and parameter.data_type == 'binary' %}selected{% endif %}>
+                                    Binario/Blob
+                                </option>
+                            </select>
+                            
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="unit" class="form-label">
+                                <i class="fas fa-ruler"></i> Unità di Misura
+                            </label>
+                            <input type="text" name="unit" id="unit" class="form-control" 
+                                value="{{ parameter.unit if parameter else '' }}" 
+                                maxlength="50" list="common_units"
+                                placeholder="es: percentage, celsius, volt, meter">
+                            
+                            <datalist id="common_units">
+                                <option value="percentage">percentage (%)</option>
+                                <option value="celsius">celsius (°C)</option>
+                                <option value="kelvin">kelvin (K)</option>
+                                <option value="fahrenheit">fahrenheit (°F)</option>
+                                <option value="volt">volt (V)</option>
+                                <option value="ampere">ampere (A)</option>
+                                <option value="watt">watt (W)</option>
+                                <option value="pascal">pascal (Pa)</option>
+                                <option value="bar">bar</option>
+                                <option value="meter">meter (m)</option>
+                                <option value="centimeter">centimeter (cm)</option>
+                                <option value="millimeter">millimeter (mm)</option>
+                                <option value="gram">gram (g)</option>
+                                <option value="kilogram">kilogram (kg)</option>
+                                <option value="liter">liter (L)</option>
+                                <option value="second">second (s)</option>
+                                <option value="hertz">hertz (Hz)</option>
+                            </datalist>
+                            
+                        </div>
+                    </div>
+
+                    <div class="row mb-4">
+                        <div class="col-md-6" id="dateSection" style="display: none;">
+                            <label for="acquisition_date" class="form-label">
+                                <i class="fas fa-calendar"></i> Data Acquisizione
+                            </label>
+                            <input type="date" name="acquisition_date" id="acquisition_date" class="form-control" 
+                                value="{{ parameter.acquisition_date.strftime('%Y-%m-%d') if parameter and parameter.acquisition_date else '' }}">
+                            <div class="form-text">Data del rilievo (ereditata dall'channel)</div>
+                        </div>
+                    </div>
+                    </fieldset>
+                </div>
+            </div> <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-map-marker-alt"></i> Posizione Geografica</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="latitude" class="form-label">Latitudine</label>
+                            <input type="number" disabled class="form-control coordinate-input" id="latitude" name="latitude" 
+                                step="0.000001" min="-90" max="90"
+                                value="{{ parameter.latitude if parameter and parameter.latitude else '' }}"
+                                onchange="updateMapFromCoords()">
+                            <div class="form-text">Coordinata Y (WGS84)</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="longitude" class="form-label">Longitudine</label>
+                            <input type="number" disabled class="form-control coordinate-input" id="longitude" name="longitude" 
+                                step="0.000001" min="-180" max="180"
+                                value="{{ parameter.longitude if parameter and parameter.longitude else '' }}"
+                                onchange="updateMapFromCoords()">
+                            <div class="form-text">Coordinata X (WGS84)</div>
+                        </div>
+                    </div>
+
+                    <div id="parameterMap"></div>
+
+                </div>
+            </div> 
+            
+            <div class="card mb-4">
+                
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-tags"></i> Metadata Aggiuntivi</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <label for="metadata" class="form-label">
+                                <i class="fas fa-code"></i> Metadata JSON
+                            </label>
+                            <textarea name="metadata" id="metadata" class="form-control font-monospace" rows="4" disabled
+                                    placeholder='{"sensor_type": "TDR", "depth_m": -0.40, "calibration": "mineral_soil"}'>{{ parameter.metadata | tojson if parameter and parameter.metadata else '{}' }}</textarea>
+                            
+                        </div>
+                    </div>
+                </div>
+            </div> <div class="card mb-4">
+    </div>
+
+</form>
+
+<script>
+    document.getElementById('formFieldset').disabled = true;
+// =============================================
+// FUNZIONI AGGIORNATE PER parameter_form.html
+// =============================================
+
+
+
+
+// =============================================
+// FUNZIONI MAPPA (RIMANGONO INVARIATE)
+// =============================================
+
+// Variabili mappa
+let parameterMap;
+let parameterMarker;
+
+// // Inizializzazione mappa
+// document.addEventListener('DOMContentLoaded', function() {
+//     initParameterMap();
+//     // resto del codice esistente...
+// });
+
+function initParameterMap() {
+    const defaultLat = {{ parameter.latitude if parameter and parameter.latitude else 40.8518 }};
+    const defaultLng = {{ parameter.longitude if parameter and parameter.longitude else 14.2681 }};
+    
+    window.parameterMap = L.map('parameterMap').setView([defaultLat, defaultLng], 20); // ← AGGIUNGI window.
+    
+    // Layer mappa (copia da channel_form.html)
+    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    });
+    const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles © Esri'
+    });
+    satellite.addTo(window.parameterMap); // ← E anche qui
+    
+    L.control.layers({
+        "OpenStreetMap": osm,
+        "Satellite": satellite
+    }).addTo(window.parameterMap); // ← E qui
+    
+    // Marker esistente se in edit mode
+    {% if action == 'edit' and parameter and parameter.latitude and parameter.longitude %}
+    window.parameterMarker = L.marker([{{ parameter.latitude }}, {{ parameter.longitude }}], {
+        draggable: true
+    }).addTo(window.parameterMap); // ← E qui
+    window.parameterMarker.on('dragend', function(e) {
+        updateCoordsFromMap(e.target.getLatLng());
+    });
+    {% endif %}
+    
+    // Click sulla mappa
+    window.parameterMap.on('click', function(e) { // ← E qui
+        updateParameterMarkerPosition(e.latlng);
+        updateCoordsFromMap(e.latlng);
+    });
+}
+
+
+
+
+
+// Inizializza filtri al caricamento (per edit mode)
+document.addEventListener('DOMContentLoaded', function() {
+    // 1. INIZIALIZZA MAPPA
+    initParameterMap();
+    
+    // 2. RIFERIMENTI AGLI ELEMENTI
+    const channelSelect = document.getElementById('channel_id');
+    const nameField = document.getElementById('name');
+    const suffixField = document.getElementById('parameter_suffix');
+    const metadataField = document.getElementById('metadata');
+    const parameterForm = document.getElementById('parameterForm');
+    const suffixAlphaField = document.getElementById('parameter_suffix_alpha');
+    
+    // 3. EVENT LISTENERS PER I CAMPI
+    if (suffixAlphaField) {
+        suffixAlphaField.addEventListener('input', function() {
+            this.value = this.value.toUpperCase().replace(/[^A-Z]/g, ''); // Solo lettere
+            updateParameterNumberPreview();
+        });
+    }
+    
+    if (channelSelect) {
+        channelSelect.addEventListener('change', function() {
+            updateChannelCodePrefix();
+            inheritCoordinates();
+        });
+    }
+    
+    console.log("🔍 nameField exists:", !!nameField);
+    if (nameField) {
+        console.log("🔍 Adding input event listener to nameField");
+        nameField.addEventListener('input', function() {
+            console.log("🎯 NAME FIELD INPUT EVENT TRIGGERED! Value:", this.value);
+            // 1. Controlla la dipendenza critica (Channel ID)
+            const channelId = document.getElementById('channel_id').value;
+            console.log("🔍 Channel ID:", channelId);
+            if (!channelId) {
+                console.log("❌ No channel ID - exiting silently");
+                return;
+            }
+            console.log("✅ Channel ID found - proceeding");
+            
+            // 2. Controlla se l'utente ha già inserito manualmente un suffisso
+            if (suffixAlphaField && !suffixAlphaField.value.trim()) {
+                // Cancella il timer precedente
+                clearTimeout(window.autoSuggestTimeout);
+                
+                // Imposta un nuovo timer di 1.5 secondi
+                window.autoSuggestTimeout = setTimeout(() => {
+                    const name = nameField.value.trim();
+                    
+                    // 3. Esegui la funzione di suggerimento solo se il nome è lungo almeno 3 caratteri
+                    if (name.length >= 3) {
+                        // Chiama la funzione di suggerimento (buttonElement = null indica chiamata automatica)
+                        generateSmartParameterSuffix(name, null);
+                    }
+                }, 1500); // 1.5 secondi
+            }
+        });
+    }
+
+    if (suffixField) {
+        suffixField.addEventListener('input', function() {
+            this.value = this.value.toUpperCase();
+            updateFullCode();
+        });
+    }
+
+    if (metadataField) {
+        metadataField.addEventListener('input', function() {
+            const value = this.value.trim();
+            if (value === '' || value === '{}') {
+                this.classList.remove('is-invalid', 'is-valid');
+                return;
+            }
+            try {
+                JSON.parse(value);
+                this.classList.remove('is-invalid');
+                this.classList.add('is-valid');
+            } catch (e) {
+                this.classList.remove('is-valid');
+                this.classList.add('is-invalid');
+            }
+        });
+    }
+    
+    if (parameterForm) {
+		parameterForm.addEventListener('submit', function(e) {
+			const metadata = metadataField ? metadataField.value.trim() : '';
+			const isEditMode = '{{ action }}' === 'edit';
+			
+			// ✅ VALIDAZIONE SUFFISSO SOLO IN NEW MODE
+			if (!isEditMode) {
+				const suffix = suffixAlphaField ? suffixAlphaField.value.trim() : '';
+				
+				if (!suffix) {
+					e.preventDefault();
+					alert('Inserisci l\'abbreviazione del parametero (es: TMP, HUM, VOL)');
+					if (suffixAlphaField) suffixAlphaField.focus();
+					return false;
+				}
+			}
+			
+			// Validazione channel (solo in new mode)
+			if (!isEditMode && (!channelSelect || !channelSelect.value)) {
+				e.preventDefault();
+				alert('Seleziona un canale per il parametro');
+				if (channelSelect) channelSelect.focus();
+				return false;
+			}
+			
+			// Aggiorna codice solo in new mode
+			if (!isEditMode) {
+				updateFullCode();
+			}
+			
+			// Validazione metadata (sempre)
+			if (metadata && metadata !== '{}') {
+				try {
+					JSON.parse(metadata);
+				} catch (error) {
+					e.preventDefault();
+					alert('Errore nel formato JSON dei metadata. Correggi prima di salvare.');
+					if (metadataField) metadataField.focus();
+					return false;
+				}
+			}
+			return true;
+		});
+	}
+
+    // 4. INIZIALIZZAZIONE CAMPI ESISTENTI
+    if (channelSelect && channelSelect.value) {
+        updateChannelPrefix();
+        updateFullCode();
+    }
+    
+    
+});
+
+</script>
+{% endblock %}

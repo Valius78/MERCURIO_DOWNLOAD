@@ -1,0 +1,417 @@
+{% extends "base.html" %}
+
+{% block title %}Measurements - Mercurio{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-ruler-combined"></i> Misure</h1>
+        <p class="text-muted">Gestione tipologie di misurazione per ogni sistema</p>
+    </div>
+    
+</div>
+
+<!-- Statistiche Rapide (LAYOUT MODERNO COME AREAS/CHANNELS/PARAMETERS/SYSTEMS) -->
+<div class="stats-row mb-4">
+    
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center text-white">
+                <i class="fas fa-ruler-combined fa-2x text-white mb-2"></i>
+                <h3>{{ measurements|length }}</h3>
+                <small>Tipi di misura</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center text-white">
+                <i class="fas fa-cogs fa-2x text-white mb-2"></i>
+                <h3>{{ measurements|map(attribute='system_name')|reject('none')|unique|list|length }}</h3>
+                <small>Sistemi collegati</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center text-white">
+                <i class="fas fa-microchip fa-2x text-white mb-2"></i>
+                <h3>{{ measurements|map(attribute='total_items')|sum }}</h3>
+                <small>Items collegati</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center text-white">
+                <i class="fas fa-satellite-dish fa-2x text-white mb-2"></i>
+                <h3>{{ measurements|map(attribute='total_channels')|sum }}</h3>
+                <small>Canali collegati</small>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+
+<!-- Filtri e Ricerca -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="input-group">
+            <span class="input-group-text"><i class="fas fa-search"></i></span>
+            <input type="text" class="form-control" id="searchMeasurements" 
+                   placeholder="Cerca misure per nome o descrizione...">
+        </div>
+    </div>
+    <div class="col-md-3">
+        <select class="form-select" id="filterSystem">
+            <option value="">Tutti i Sistemi</option>
+            {% set systems = measurements|map(attribute='system_name')|reject('none')|unique|sort %}
+            {% for system in systems %}
+            <option value="{{ system }}">{{ system }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-3">
+        <select class="form-select" id="sortBy">
+            <option value="system">Ordina per Sistema</option>
+            <option value="name">Ordina per Nome</option>
+            <option value="items">Ordina per # Items</option>
+        </select>
+    </div>
+</div>
+
+{% if measurements %}
+<div class="row" id="measurementsContainer">
+    {% for measurement in measurements %}
+    <div class="col-md-6 col-lg-4 mb-3 measurement-card"
+         data-system="{{ measurement.system_name or '' }}"
+         data-search="{{ (measurement.name|lower) + ' ' + (measurement.description|lower if measurement.description else '') + ' ' + (measurement.system_name|lower if measurement.system_name else '') }}">
+
+        <div class="card h-100 d-flex flex-column">
+
+            <!-- HEADER -->
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">
+                    <i class="fas fa-ruler-combined"></i>
+                    {{ measurement.name|title }}
+                </h6>
+                <div>
+                    {% if measurement.code %}
+                        <span class="badge bg-secondary">{{ measurement.code }}</span>
+                    {% endif %}
+                    {% if measurement.metadata and measurement.metadata != '{}' %}
+                        <span class="badge bg-info" title="Ha metadata aggiuntivi">
+                            <i class="fas fa-tags"></i>
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- BODY -->
+            <div class="card-body flex-grow-1">
+
+                <!-- Descrizione -->
+                {% if measurement.description %}
+                <p class="card-text text-muted small mb-2" style="min-height: 2.5em;">
+                    {{ measurement.description[:100] }}{% if measurement.description|length > 100 %}...{% endif %}
+                </p>
+                {% else %}
+                <p class="card-text text-muted small mb-2" style="min-height: 2.5em;">Nessuna descrizione</p>
+                {% endif %}
+
+                <!-- System -->
+                <p class="mb-1 small text-muted">
+                    <i class="fas fa-cogs me-1"></i>
+                    {{ measurement.system_name or 'System non specificato' }}
+                </p>
+
+                <!-- Metadata -->
+                {% if measurement.metadata and measurement.metadata != '{}' %}
+                <p class="mb-1 small text-muted">
+                    <i class="fas fa-tags me-1"></i>
+                    <strong>Metadata:</strong>
+
+                    {% set meta = measurement.metadata %}
+                    {% if meta.unit %}Unit: {{ meta.unit }} {% endif %}
+                    {% if meta.range %} | Range: {{ meta.range.min }} - {{ meta.range.max }} {% endif %}
+                    {% if meta.precision %} | Precision: {{ meta.precision }}{% endif %}
+                </p>
+                {% endif %}
+
+                <!-- Contatori -->
+                <p class="mb-1 small text-muted">
+                    <i class="fas fa-box me-1"></i>
+                    {{ measurement.total_items }} Items
+                </p>
+
+                <p class="mb-1 small text-muted">
+                    <i class="fas fa-satellite-dish me-1"></i>
+                    {{ measurement.total_channels }} Channels
+                </p>
+
+                <!-- Data creazione -->
+                {% if measurement.created_at %}
+                <p class="small text-muted mt-2 mb-0">
+                    <i class="fas fa-calendar"></i>
+                    {{ measurement.created_at.strftime('%d/%m/%Y') }}
+                </p>
+                {% endif %}
+
+            </div>
+
+            <!-- FOOTER -->
+            <div class="card-footer bg-transparent">
+                <div class="btn-group w-100" role="group">
+
+                    <a href="{{ url_for('measurements.edit_measurement', measurement_id=measurement.measurement_id) }}" 
+                       class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-edit"></i> Info
+                    </a>
+
+                    {% if measurement.total_items > 0 %}
+                    <button class="btn btn-outline-info btn-sm"
+                            onclick="showItems({{ measurement.measurement_id }}, '{{ measurement.name }}')">
+                        <i class="fas fa-microchip"></i> Items ({{ measurement.total_items }})
+                    </button>
+                    {% else %}
+                    <button class="btn btn-outline-secondary btn-sm" disabled>
+                        <i class="fas fa-microchip"></i> Nessun Item
+                    </button>
+                    {% endif %}
+
+                    
+                </div>
+            </div>
+
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+
+
+<!-- Modal per visualizzare items di un measurement -->
+<div class="modal fade" id="itemsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-microchip"></i> 
+                    Items per <span id="modalMeasurementName"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modalItemsList">
+                    <div class="text-center">
+                        <i class="fas fa-spinner fa-spin"></i> Caricamento...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<div class="text-center py-5">
+    <i class="fas fa-ruler-combined fa-4x text-muted mb-3"></i>
+    <h4 class="text-muted">Nessun Measurement</h4>
+    <p class="text-muted">Inizia creando il primo tipo di misurazione</p>
+    <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+        <a href="{{ url_for('measurements.new_measurement') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Crea Primo Measurement
+        </a>
+        <a href="{{ url_for('systems.systems') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-cogs"></i> Prima crea un System
+        </a>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .measurement-card.hidden {
+        display: none !important;
+    }
+    
+    .measurement-card {
+        transition: all 0.3s ease;
+    }
+    
+    .measurement-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    .card-title {
+        font-size: 1.1rem;
+    }
+    
+    .badge {
+        font-size: 0.75em;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let searchTimeout = null;
+    
+    // Inizializzazione
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeSearch();
+        initializeFilters();
+    });
+    
+    // === RICERCA ===
+    function initializeSearch() {
+        const searchInput = document.getElementById('searchMeasurements');
+        
+        searchInput.addEventListener('input', function() {
+            const query = this.value.trim().toLowerCase();
+            
+            // Debounce
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+            
+            searchTimeout = setTimeout(() => {
+                applyFilters();
+            }, 300);
+        });
+    }
+    
+    // === FILTRI ===
+    function initializeFilters() {
+        document.getElementById('filterSystem').addEventListener('change', applyFilters);
+        document.getElementById('sortBy').addEventListener('change', applySorting);
+    }
+    
+    function applyFilters() {
+		const systemFilter = document.getElementById('filterSystem').value.trim();
+		const searchQuery = document.getElementById('searchMeasurements').value.trim().toLowerCase();
+		
+		const cards = document.querySelectorAll('.measurement-card');
+		
+		cards.forEach(card => {
+			const system = (card.dataset.system || '').trim();
+			const searchContent = (card.dataset.search || '').trim().toLowerCase();
+			
+			const matchesSystem = !systemFilter || system === systemFilter;
+			const matchesSearch = !searchQuery || searchContent.includes(searchQuery);
+			
+			if (matchesSystem && matchesSearch) {
+				card.style.display = ''; // Mostra la card
+			} else {
+				card.style.display = 'none'; // Nasconde la card
+			}
+		});
+	}
+    
+    // === ORDINAMENTO ===
+    function applySorting() {
+        const sortBy = document.getElementById('sortBy').value;
+        const container = document.getElementById('measurementsContainer');
+        const cards = Array.from(container.querySelectorAll('.measurement-card'));
+        
+        cards.sort((a, b) => {
+            switch(sortBy) {
+                case 'name':
+                    const nameA = a.querySelector('.card-title').textContent.trim();
+                    const nameB = b.querySelector('.card-title').textContent.trim();
+                    return nameA.localeCompare(nameB);
+                    
+                case 'items':
+                    const itemsA = parseInt(a.querySelector('.text-success').textContent) || 0;
+                    const itemsB = parseInt(b.querySelector('.text-success').textContent) || 0;
+                    return itemsB - itemsA; // Decrescente
+                    
+                case 'system':
+                default:
+                    const systemA = a.dataset.system || '';
+                    const systemB = b.dataset.system || '';
+                    return systemA.localeCompare(systemB);
+            }
+        });
+        
+        // Riordina i cards nel DOM
+        cards.forEach(card => container.appendChild(card));
+    }
+    
+    // === AZIONI ===
+    function deleteMeasurement(measurementId, name, itemsCount) {
+        let message = `Sei sicuro di voler eliminare il measurement "${name}"?`;
+        
+        if (itemsCount > 0) {
+            message += `\n\nATTENZIONE: Questo measurement è utilizzato da ${itemsCount} item(s).`;
+            message += `\nL'eliminazione non sarà possibile.`;
+            
+            alert(message);
+            return;
+        }
+        
+        message += `\n\nQuesta azione è irreversibile.`;
+        
+        if (confirm(message)) {
+            // Crea form per DELETE request
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `/delete_measurement/${measurementId}`;
+            
+            document.body.appendChild(form);
+            form.submit();
+        }
+    }
+    
+    async function showItems(measurementId, measurementName) {
+        document.getElementById('modalMeasurementName').textContent = measurementName;
+        
+        const modal = new bootstrap.Modal(document.getElementById('itemsModal'));
+        modal.show();
+        
+        try {
+            const response = await fetch(`/api/items/by_measurement/${measurementId}`);
+            const items = await response.json();
+            
+            const itemsList = document.getElementById('modalItemsList');
+            
+            if (items && items.length > 0) {
+                const html = items.map(item => `
+                    <div class="card mb-2">
+                        <div class="card-body py-2">
+                            <div class="row align-items-center">
+                                <div class="col-md-8">
+                                    <h6 class="mb-1">${item.name}</h6>
+                                    <small class="text-muted">
+                                        <i class="fas fa-map-marker-alt"></i> ${item.area_name || 'Area non specificata'}
+                                        ${item.code ? `• Codice: ${item.code}` : ''}
+                                    </small>
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <a href="/items/edit/${item.item_id}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-edit"></i> Dettagli
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                
+                itemsList.innerHTML = html;
+            } else {
+                itemsList.innerHTML = '<p class="text-muted text-center">Nessun item trovato per questo measurement.</p>';
+            }
+        } catch (error) {
+            console.error('Errore caricamento items:', error);
+            document.getElementById('modalItemsList').innerHTML = 
+                '<div class="alert alert-danger">Errore nel caricamento degli items.</div>';
+        }
+    }
+</script>
+{% endblock %}

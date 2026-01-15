@@ -1,0 +1,366 @@
+{% extends "base.html" %} {% block title %} {% if action == 'edit' %}Modifica
+Scenario{% else %}Nuovo Scenario{% endif %}-Mercurio{% endblock %} {% block
+content %}
+<div class="row mb-4">
+  <div class="col">
+    <h1>
+      <i class="fas fa-{{ 'edit' if action == 'edit' else 'plus' }}"> </i>
+      {% if action == 'edit' %}Scenario{% else %}Nuovo Scenario{% endif
+      %}
+    </h1>
+    <p class="text-muted">
+      informazioni dello scenario esistente
+    </p>
+  </div>
+  <div class="col-auto">
+    <a
+      href="{{ url_for('scenarios.scenarios') }}"
+      class="btn btn-outline-secondary"
+    >
+      <i class="fas fa-arrow-left"></i> Torna alla Lista
+    </a>
+  </div>
+</div>
+
+<form method="POST" id="scenarioForm">
+  
+  {% if scenario %}
+  <input type="hidden" name="scenario_id" value="{{ scenario.scenario_id }}" />
+  {% endif %}
+
+  <div class="row">
+    <div class="col-md-6">
+      <fieldset id="formFieldset">
+      <div class="card">
+        <div class="card-header">
+          <h5><i class="fas fa-info-circle"></i> Informazioni Base</h5>
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label for="name" class="form-label">Nome Scenario </label>
+            <input
+              type="text"
+              class="form-control"
+              id="name"
+              name="name"
+              value="{{ scenario.name if scenario else '' }}"
+              placeholder="es. Scrajo, Caiazzo, Ponte XYZ..."
+              required
+            />
+            
+          </div>
+
+          <div class="mb-3">
+            <label for="code" class="form-label">Codice Progetto </label>
+            <input
+              type="text"
+              class="form-control"
+              id="code"
+              name="code"
+              value="{{ scenario.code if scenario else '' }}"
+              placeholder="es. SCR, CAI, PON..."
+              maxlength="10"
+              required
+              style="text-transform: uppercase"
+            />
+          </div>
+
+          <div class="mb-3">
+            <label for="description" class="form-label">Descrizione</label>
+            <textarea
+              class="form-control"
+              id="description"
+              name="description"
+              rows="3"
+              placeholder="Descrizione dettagliata del progetto..."
+            >
+{{ scenario.description if scenario else '' }}</textarea
+            >
+
+          </div>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="latitude" class="form-label">Latitudine </label>
+                <input
+                  type="number"
+                  class="form-control"
+                  id="latitude"
+                  name="latitude"
+                  value="{{ scenario.latitude if scenario else '' }}"
+                  step="0.000001"
+                  placeholder="40.667123"
+                  required
+                />
+                <div class="form-text">Coordinate GPS (WGS84)</div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="longitude" class="form-label">Longitudine </label>
+                <input
+                  type="number"
+                  class="form-control"
+                  id="longitude"
+                  name="longitude"
+                  value="{{ scenario.longitude if scenario else '' }}"
+                  step="0.000001"
+                  placeholder="14.440123"
+                  required
+                />
+                <div class="form-text">Coordinate GPS (WGS84)</div>
+              </div>
+            </div>
+          </div>
+
+          
+        </div>
+      </div>
+
+      <div class="card mt-3">
+        <div class="card-header">
+          <h5><i class="fas fa-tags"></i> Metadata Aggiuntivi</h5>
+        </div>
+        <div class="card-body">
+          {% if scenario and scenario.metadata %} {% set meta =
+          scenario.metadata %} {% else %} {% set meta = {} %} {% endif %}
+
+          <div class="mb-3">
+            <label for="client" class="form-label">Cliente</label>
+            <input
+              type="text"
+              class="form-control"
+              id="client"
+              name="client"
+              value="{{ meta.client if meta.client is defined else '' }}"
+              placeholder="es. Regione Campania"
+            />
+          </div>
+
+          <div class="mb-3">
+            <label for="start_date" class="form-label">Data Inizio</label>
+            <input
+              type="date"
+              class="form-control"
+              id="start_date"
+              name="start_date"
+              value="{{ meta.start_date if meta.start_date is defined else '' }}"
+            />
+          </div>
+        </div>
+      </div>
+      </fieldset>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header">
+          <h5><i class="fas fa-map"></i> Posizione Geografica</h5>
+        </div>
+        <div class="card-body">
+          <div id="map" class="map-container"></div>
+          <div class="mt-2">
+
+          </div>
+        </div>
+      </div>
+
+
+    </div>
+  </div>
+  </fieldset>
+</form>
+
+{% endblock %} {% block scripts %}
+<script>
+  let map;
+  let marker;
+  document.getElementById('formFieldset').disabled = true;
+
+  // Inizializzazione mappa
+  document.addEventListener('DOMContentLoaded', function() {
+      initMap();
+      updateCoordinatePreview();
+  });
+
+  function initMap() {
+      // Coordinate di default (Napoli)
+      let defaultLat = {{ scenario.latitude if scenario else 40.8518 }};
+      let defaultLng = {{ scenario.longitude if scenario else 14.2681 }};
+
+      // Inizializza mappa
+      map = L.map('map').setView([defaultLat, defaultLng], 10);
+
+      // Layer mappa
+      const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap contributors'
+      });
+
+      const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+          attribution: 'Tiles &copy; Esri'
+      });
+      osm.addTo(map);
+
+      // Controllo layer
+      L.control.layers({
+          "OpenStreetMap": osm,
+          "Satellite": satellite
+      }).addTo(map);
+
+
+
+      // Aggiungi marker se coordinate esistenti
+      {% if scenario and scenario.latitude and scenario.longitude %}
+      marker = L.marker([{{ scenario.latitude }}, {{ scenario.longitude }}], {
+          draggable: true
+      }).addTo(map);
+
+      marker.on('dragend', function(e) {
+          updateCoordinatesFromMarker(e.target.getLatLng());
+      });
+      {% endif %}
+
+      
+  }
+
+  function updateCoordinatesFromMarker(latlng) {
+      document.getElementById('latitude').value = latlng.lat.toFixed(6);
+      document.getElementById('longitude').value = latlng.lng.toFixed(6);
+      updateCoordinatePreview();
+  }
+
+  function updateCoordinatePreview() {
+      const lat = document.getElementById('latitude').value;
+      const lng = document.getElementById('longitude').value;
+
+      document.getElementById('previewLat').textContent = lat || 'Non impostata';
+      document.getElementById('previewLng').textContent = lng || 'Non impostata';
+  }
+
+  function centerMapOnCoords() {
+      const lat = parseFloat(document.getElementById('latitude').value);
+      const lng = parseFloat(document.getElementById('longitude').value);
+
+      if (lat && lng) {
+          map.setView([lat, lng], 15);
+
+          if (marker) {
+              map.removeLayer(marker);
+          }
+
+          marker = L.marker([lat, lng], {
+              draggable: true
+          }).addTo(map);
+
+          marker.on('dragend', function(e) {
+              updateCoordinatesFromMarker(e.target.getLatLng());
+          });
+      } else {
+          alert('Inserisci prima le coordinate nei campi');
+      }
+  }
+
+  function getCurrentLocation() {
+      if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(function(position) {
+              const lat = position.coords.latitude;
+              const lng = position.coords.longitude;
+
+              document.getElementById('latitude').value = lat.toFixed(6);
+              document.getElementById('longitude').value = lng.toFixed(6);
+              updateCoordinatePreview();
+
+              map.setView([lat, lng], 15);
+
+              if (marker) {
+                  map.removeLayer(marker);
+              }
+
+              marker = L.marker([lat, lng], {
+                  draggable: true
+              }).addTo(map);
+
+              marker.on('dragend', function(e) {
+                  updateCoordinatesFromMarker(e.target.getLatLng());
+              });
+          }, function() {
+              alert('Errore nel recupero della posizione GPS');
+          });
+      } else {
+          alert('Geolocalizzazione non supportata dal browser');
+      }
+  }
+
+  // Aggiorna preview quando cambiano i campi
+  document.getElementById('latitude').addEventListener('input', updateCoordinatePreview);
+  document.getElementById('longitude').addEventListener('input', updateCoordinatePreview);
+
+  // Validazione form
+  document.getElementById('scenarioForm').addEventListener('submit', function(e) {
+      const lat = document.getElementById('latitude').value;
+      const lng = document.getElementById('longitude').value;
+      const name = document.getElementById('name').value;
+
+      if (!name) {
+          alert('Il nome scenario è obbligatorio');
+          e.preventDefault();
+          return;
+      }
+
+      if (!lat || !lng) {
+          alert('Le coordinate sono obbligatorie');
+          e.preventDefault();
+          return;
+      }
+
+      if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+          alert('Coordinate non valide');
+          e.preventDefault();
+          return;
+      }
+  });
+
+  // Aggiungere nella sezione <script>
+  document.getElementById('name').addEventListener('input', function() {
+      const name = this.value.trim();
+      const codeField = document.getElementById('code');
+
+      // Auto-genera solo se il campo code è vuoto o se stiamo creando nuovo scenario
+      if (name.length >= 3 && (!codeField.value || !document.querySelector('input[name="scenario_id"]'))) {
+          // Prende prime 3 lettere, rimuove spazi e caratteri speciali, uppercase
+          const autoCode = name.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase();
+          codeField.value = autoCode;
+      }
+  });
+
+  // Forza uppercase nel campo code
+  document.getElementById('code').addEventListener('input', function() {
+      this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  });
+</script>
+<!-- AGGIUNGI QUESTO ALLA FINE DEL BLOCK SCRIPTS -->
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet-control-geocoder@2.4.0/dist/Control.Geocoder.css"
+/>
+<script src="https://unpkg.com/leaflet-control-geocoder@2.4.0/dist/Control.Geocoder.js"></script>
+
+<style>
+  .leaflet-control-geocoder {
+    width: 300px !important;
+  }
+  .leaflet-control-geocoder-form input {
+    width: 250px !important;
+  }
+
+  .leaflet-control-geocoder {
+    /* Rimuove il posizionamento predefinito */
+    position: absolute;
+    top: 0px; /* Imposta la distanza dall'alto */
+    left: 50%; /* Sposta l'elemento al centro orizzontale */
+    transform: translateX(20%); /* Regola per centrare correttamente */
+  }
+</style>
+
+{% endblock %}

@@ -1,0 +1,576 @@
+{% extends "base.html" %}
+
+{% block title %}Aree - Mercurio{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-map-marked-alt"></i> Aree di Monitoraggio</h1>
+        <p class="text-muted">Gestione aree e zone di interesse</p>
+    </div>
+    <div class="col-auto">
+	
+        <button class="btn btn-outline-secondary" onclick="toggleMapView()">
+            <i class="fas fa-globe"></i> Vista Mappa
+        </button>
+    </div>
+</div>
+
+
+<div class="stats-row mb-4">
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-globe-americas fa-2x text-success text-white mb-2"></i>
+                <h3>{{ areas|map(attribute='scenario_name')|unique|list|length }}</h3>
+                <p class="mb-0">Scenari attivi</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-map-marked-alt fa-2x text-primary text-white mb-2"></i>
+                <h3>{{ areas|length }}</h3>
+                <p class="mb-0">Aree</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-microchip fa-2x text-warning text-white mb-2"></i>
+                <h3>{{ areas|map(attribute='total_items')|sum }}</h3>
+				<p class="mb-0">Items Collegati</p>
+            </div>
+        </div>
+    </div>
+    
+</div>
+
+
+<!-- SEZIONE FILTRI CORRETTA -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="input-group">
+            <span class="input-group-text"><i class="fas fa-search"></i></span>
+            <input type="text" class="form-control" id="searchAreas" 
+                   placeholder="Cerca aree per nome, scenario o tipo...">
+        </div>
+    </div>
+    <div class="col-md-3">
+        <select class="form-select" id="filterScenario">
+            <option value="">Tutti gli scenari</option>
+            {% set scenarios = areas|map(attribute='scenario_name')|reject('none')|reject('equalto', '')|unique|sort %}
+            {% for scenario in scenarios %}
+            <option value="{{ scenario }}">{{ scenario }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-3">
+		<select class="form-select" id="filterType">
+			<option value="">Tutti le fenomenologie</option>
+			<!-- NOTA: Questi verranno popolati dinamicamente via JavaScript -->
+		</select>
+	</div>
+</div>
+
+<!-- Vista Mappa con clustering -->
+<div id="mapView" class="card mb-4" style="display: none;">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="fas fa-map"></i> Mappa Aree 
+            <span class="badge bg-primary" id="mapAreasCount">{{ areas|length }}</span>
+        </h5>
+        <div>
+            <div class="btn-group btn-group-sm me-2" role="group">
+                <button type="button" class="btn btn-outline-secondary" onclick="fitAllAreas()">
+                    <i class="fas fa-expand-arrows-alt"></i> Mostra Tutti
+                </button>
+                <button type="button" class="btn btn-outline-info" onclick="centerOnItaly()">
+                    <i class="fas fa-home"></i> Italia
+                </button>
+            </div>
+            <button type="button" class="btn btn-outline-danger btn-sm" onclick="toggleMapView()">
+                <i class="fas fa-times"></i> Chiudi
+            </button>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div id="mapLoadingOverlay" style="display: none;">
+            <div class="text-center p-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Caricamento...</span>
+                </div>
+                <p class="mt-2">Caricamento mappa...</p>
+            </div>
+        </div>
+        <div id="areasMap" style="height: 500px;"></div>
+    </div>
+</div>
+
+{% if areas %}
+<div class="row" id="areasContainer">
+    {% for area in areas %}
+    <div class="col-md-6 col-lg-4 mb-3 area-card"
+         data-area-id="{{ area.area_id }}"  
+         data-scenario="{{ area.scenario_name or '' }}" 
+         data-type="{{ area.area_type or '' }}"
+         data-search="{{ (area.name|lower if area.name else '') + ' ' + (area.scenario_name|lower if area.scenario_name else '') + ' ' + (area.area_type|lower if area.area_type else '') }}">
+        
+        <div class="card h-100 d-flex flex-column"> 
+            
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">
+                    <i class="fas fa-map-marker-alt text-primary"></i> 
+                    {{ area.name }}
+                </h6>
+                
+                <div class="d-flex flex-row flex-nowrap ms-2" style="gap: 0.25rem;">
+                    {% if area.code %}
+                        <span class="badge bg-primary text-truncate">{{ area.code }}</span> 
+                    {% endif %}
+                    {% if area.scenario_name %}
+                        <span class="badge bg-info text-truncate">{{ area.scenario_name }}</span> 
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card-body d-flex flex-column"> 
+                <div class="flex-grow-1">
+                    
+                    <p class="card-text text-muted small mb-2" style="min-height: 2.5em;"> {% if area.description %}
+                            {{ area.description[:100] }}{% if area.description|length > 100 %}...{% endif %}
+                        {% else %}
+                            <span class="d-block">&nbsp;</span>
+                        {% endif %}
+                    </p>
+                    
+                    <p class="text-muted small mb-2" style="min-height: 1.2em;"> {% if area.area_type %}
+                            <i class="fas fa-layer-group"></i> 
+                            {{ area.area_type|title|replace('_', ' ') }}
+                        {% else %}
+                            &nbsp; {% endif %}
+                    </p>
+                    
+                    <div class="small text-muted mb-2">
+                        <i class="fas fa-crosshairs"></i> 
+                        {{ "%.6f"|format(area.latitude) }}, {{ "%.6f"|format(area.longitude) }}
+                    </div>
+                    
+                </div>
+                <div class="d-flex justify-content-between align-items-center mt-auto pt-2 border-top"> 
+                    <small class="text-muted">
+                        <i class="fas fa-microchip"></i> 
+                        {{ area.total_items }} item{{ 's' if area.total_items != 1 else '' }}
+                    </small>
+                    <small class="text-muted">
+                        <i class="fas fa-calendar"></i> 
+                        {{ area.created_at.strftime('%d/%m/%Y') if area.created_at else 'N/A' }}
+                    </small>
+                </div>
+            </div>
+            
+            <div class="card-footer bg-transparent">
+                <div class="btn-group w-100">
+                    <a href="{{ url_for('areas.edit_area', area_id=area.area_id) }}" 
+                       class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-edit"></i> Info
+                    </a>
+                    <button class="btn btn-sm btn-outline-secondary" 
+                            onclick="showAreaOnMap({{ area.latitude }}, {{ area.longitude }}, '{{ area.name }}', '{{ area.area_geometry }}')">
+                        <i class="fas fa-map"></i> Mappa
+                    </button>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+
+<!-- Modal per vista dettaglio area -->
+<div class="modal fade" id="areaDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-map-marker-alt"></i> 
+                    <span id="modalAreaName"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modalAreaMap" style="height: 300px;"></div>
+                <div id="modalAreaInfo" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+<link rel="stylesheet" href="{{ url_for('static', filename='css/map-common.css') }}" />
+<style>
+    .area-card.hidden {
+        display: none !important;
+    }
+    .search-highlight {
+        background-color: yellow;
+        font-weight: bold;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/map-common.js') }}"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+<script>
+// === CONFIGURAZIONE AREAS ===
+const areasConfig = {
+    entityType: 'area',
+    entitiesProperty: 'areas',
+    markerPrefix: 'area-marker',
+    mapContainerId: 'areasMap',
+    loadingOverlayId: 'mapLoadingOverlay',
+    counterElementId: 'mapAreasCount',
+    listCounterElementId: 'listAreasCount',
+    defaultColor: '#28a745',
+    
+    popupBuilder: {
+        single: function(area) {
+			return `
+				<div class="popup-content">
+					<div class="popup-header">
+						<i class="fas fa-map-marked-alt"></i> ${area.name}
+					</div>
+					<div class="popup-badges">
+						<span class="badge bg-primary">${area.code || area.area_id}</span>
+						${area.area_type ? `<span class="badge bg-info">${area.area_type}</span>` : ''}
+					</div>
+					<div class="small mb-2">
+						<div><strong>Scenario:</strong> ${area.scenario_name || 'N/A'}</div>
+						${area.description ? `<div><strong>Descrizione:</strong> ${area.description}</div>` : ''}
+						${area.total_items ? `<div><strong>Items:</strong> ${area.total_items}</div>` : ''}
+					</div>
+					<div class="popup-actions mt-2">
+						<a href="/areas/edit/${area.area_id}" class="btn btn-sm btn-outline-primary">
+							<i class="fas fa-edit"></i> Dettagli
+						</a>
+					</div>
+				</div>
+			`;
+		},
+        cluster: function(areas) {
+            const scenarios = [...new Set(areas.map(a => a.scenario_name).filter(s => s))];
+            return `
+                <div class="popup-content">
+                    <div class="popup-header">
+                        <i class="fas fa-map-marked-alt"></i> ${areas.length} Aree
+                    </div>
+                    <div class="popup-badges mb-2">
+                        ${scenarios.map(s => `<span class="badge bg-success">${s}</span>`).join(' ')}
+                    </div>
+                    <div class="small mb-2">
+                        <strong>Aree in questa zona:</strong>
+                        ${areas.slice(0, 5).map(a => `<div>• ${a.name} (${a.code || a.area_id})</div>`).join('')}
+                        ${areas.length > 5 ? `<div>... e altre ${areas.length - 5} aree</div>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+    }
+};
+
+// === VARIABILI GLOBALI ===
+let areasMap = null;
+let areasMarkersCluster = null;
+let areaMarkers = [];
+const allAreas = {{ areas|tojson|safe }};
+let currentFilteredAreas = allAreas; 
+let modalMap = null;
+
+
+// === FILTRI A CASCATA DINAMICI ===
+document.addEventListener('DOMContentLoaded', function() {
+    const scenarioSelect = document.getElementById('filterScenario');
+    const typeSelect = document.getElementById('filterType');
+    const searchField = document.getElementById('searchAreas');
+    
+    // Funzione per aggiornare le opzioni
+    function updateSelectOptions(selectElement, options, keepCurrent = false) {
+        const currentValue = keepCurrent ? selectElement.value : '';
+        if (selectElement.id === 'filterScenario')
+            selectElement.innerHTML = '<option value="">Tutti gli scenari</option>';
+        else if (selectElement.id === 'filterType')
+            selectElement.innerHTML = '<option value="">Tutte le fenomenologie</option>';
+        
+        [...new Set(options)].sort().forEach(option => {
+            const optionElement = document.createElement('option');
+            optionElement.value = option;
+            optionElement.textContent = option;
+            selectElement.appendChild(optionElement);
+        });
+        
+        if (currentValue && Array.from(selectElement.options).some(opt => opt.value === currentValue)) {
+            selectElement.value = currentValue;
+        }
+    }
+    
+    // Aggiorna filtri quando cambia scenario
+    function updateAllFilters() {
+        const selectedScenario = scenarioSelect.value;
+        
+        // Filtra aree per scenario selezionato
+        const filteredAreas = allAreas.filter(area => 
+            !selectedScenario || area.scenario_name === selectedScenario
+        );
+        
+        // Aggiorna tipi disponibili
+        const availableTypes = filteredAreas
+            .map(area => area.area_type)
+            .filter(type => type && type.trim() !== '');
+        
+        updateSelectOptions(typeSelect, availableTypes, true);
+        applyFilters();
+    }
+    
+    // Applica filtri
+    function applyFilters() {
+		console.log('✅ applyFilters chiamata');
+		const search = searchField.value.toLowerCase();
+		const scenario = scenarioSelect.value;
+		const areaType = typeSelect.value;
+		
+		console.log('🎛️ Filtri attuali:', { search, scenario, areaType });
+		
+		const filteredAreas = allAreas.filter(area => {
+			const matchesSearch = !search || 
+				(area.name && area.name.toLowerCase().includes(search)) ||
+				(area.scenario_name && area.scenario_name.toLowerCase().includes(search)) ||
+				(area.area_type && area.area_type.toLowerCase().includes(search)) ||
+				(area.code && area.code.toLowerCase().includes(search));
+			
+			const matchesScenario = !scenario || area.scenario_name === scenario;
+			const matchesType = !areaType || area.area_type === areaType;
+			
+			return matchesSearch && matchesScenario && matchesType;
+		});
+		
+		console.log('📊 Aree filtrate finali:', filteredAreas.length);
+		
+		// ✅ SALVA LE AREE FILTRATE
+		currentFilteredAreas = filteredAreas;
+		
+		// Aggiorna vista tabella/card
+		updateAreasDisplay(filteredAreas);
+		
+		// Aggiorna mappa se attiva
+		if (areasMap && areasMarkersCluster) {
+			MapCommon.loadEntitiesOnMap(filteredAreas, areasConfig, areasMarkersCluster, areaMarkers);
+		}
+	}
+    
+    // Event listeners
+    scenarioSelect.addEventListener('change', updateAllFilters);
+    typeSelect.addEventListener('change', applyFilters);
+    searchField.addEventListener('input', applyFilters);
+    
+    // Inizializza filtri
+    updateAllFilters();
+});
+
+// === FUNZIONI MAPPA ===
+function toggleMapView() {
+    const mapView = document.getElementById('mapView');
+    if (mapView.style.display === 'none') {
+        mapView.style.display = 'block';
+        if (!areasMap) {
+            initializeAreasMap();
+        }
+    } else {
+        mapView.style.display = 'none';
+    }
+}
+
+async function initializeAreasMap() {
+    try {
+        const mapComponents = await MapCommon.initializeEntityMap(areasConfig);
+        areasMap = mapComponents.map;
+        areasMarkersCluster = mapComponents.markersCluster;
+        
+        // ✅ USA LE AREE FILTRATE invece di allAreas
+        await MapCommon.loadEntitiesOnMap(currentFilteredAreas, areasConfig, areasMarkersCluster, areaMarkers);
+        
+        // AUTO-ZOOM usando il cluster
+        setTimeout(() => {
+            if (areasMarkersCluster.getLayers().length > 0) {
+                areasMap.fitBounds(areasMarkersCluster.getBounds().pad(0.1));
+            }
+        }, 200);
+        
+        console.log('Mappa aree inizializzata con successo');
+    } catch (error) {
+        console.error('Errore inizializzazione mappa aree:', error);
+    }
+}
+
+// === FUNZIONI UTILITY MAPPA ===
+function fitAllAreas() {
+    if (areasMap && areasMarkersCluster && areasMarkersCluster.getLayers().length > 0) {
+        areasMap.fitBounds(areasMarkersCluster.getBounds().pad(0.1));
+    }
+    // ✅ OPZIONALE: Se nessun marker, ricarica le aree filtrate
+    else if (areasMap && currentFilteredAreas.length > 0) {
+        MapCommon.loadEntitiesOnMap(currentFilteredAreas, areasConfig, areasMarkersCluster, areaMarkers);
+    }
+}
+
+function centerOnItaly() {
+    if (areasMap) {
+        areasMap.setView([41.8719, 12.5674], 6);
+    }
+}
+
+function toggleMapStyle() {
+    // Implementazione toggle stile mappa (opzionale)
+    console.log('Toggle stile mappa non ancora implementato');
+}
+
+// === FUNZIONI DI SUPPORTO ===
+function updateAreasDisplay(filteredAreas) {
+    const areaCards = document.querySelectorAll('.area-card');
+    
+    areaCards.forEach((card, index) => {
+        const areaId = card.getAttribute('data-area-id');
+        
+        const isVisible = filteredAreas.some(area => area.area_id.toString() === areaId);
+        
+        // Approccio più diretto - setta direttamente lo style
+        if (isVisible) {
+            card.style.display = '';
+            card.classList.remove('hidden');
+        } else {
+            card.style.display = 'none';
+            card.classList.add('hidden');
+        }
+    });
+}
+
+
+// ----------------------------------------------------------------------
+// === FUNZIONE DI PARSING WKT CORRETTA ===
+// ----------------------------------------------------------------------
+
+function parseWKTPolygon(wkt) {
+    try {
+        if (!wkt || typeof wkt !== 'string' || !wkt.toUpperCase().startsWith('POLYGON')) {
+            return null;
+        }
+        const coordsStrMatch = wkt.match(/POLYGON\(\(([^)]+)\)\)/);
+        if (!coordsStrMatch || !coordsStrMatch[1]) return null;
+        
+        const coordsStr = coordsStrMatch[1];
+        const pairs = coordsStr.split(',');
+        
+        const leafletCoords = pairs.map(pair => {
+            // WKT è Longitudine, Latitudine. Leaflet è Latitudine, Longitudine.
+            const [lng, lat] = pair.trim().split(' ').map(parseFloat);
+            return [lat, lng]; 
+        });
+        
+        // CORREZIONE: Rimuoviamo .slice(0, -1)
+        // Se il WKT è formattato correttamente (come poligono chiuso), non dobbiamo rimuovere l'ultima coordinata, 
+        // che è identica alla prima e serve a completare la forma.
+        return leafletCoords; 
+        
+    } catch (e) {
+        console.error('Errore parsing WKT:', e);
+        return null;
+    }
+}
+
+
+
+// Mantieni la funzione showAreaOnMap esistente per retrocompatibilità
+function showAreaOnMap(lat, lng, name, geometry) {
+    document.getElementById('modalAreaName').textContent = name;
+
+    const modalElement = document.getElementById('areaDetailModal');
+    const modal = new bootstrap.Modal(modalElement); 
+
+    modal.show();
+
+    setTimeout(() => {
+        const mapContainerId = 'modalAreaMap';
+
+        if (modalMap) {
+            modalMap.remove();
+            modalMap = null;
+        }
+        
+        modalMap = L.map(mapContainerId).setView([lat, lng], 14);
+        
+        const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri'
+        }).addTo(modalMap);
+        
+        const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        });
+
+        L.control.layers({
+            "Satellite": satellite,
+            "OpenStreetMap": osm
+        }).addTo(modalMap);
+        
+        let boundsToFit = null;
+        
+        if (geometry && geometry !== 'null' && geometry.trim() !== '') {
+            const coords = parseWKTPolygon(geometry);
+            if (coords) {
+                const polygon = L.polygon(coords, {
+                    color: '#dc3545', 
+                    weight: 3, 
+                    fillOpacity: 0.3 
+                }).addTo(modalMap);
+                
+                boundsToFit = polygon.getBounds();
+            }
+        }
+        
+        L.marker([lat, lng]).addTo(modalMap);
+        
+        if (boundsToFit) {
+            modalMap.fitBounds(boundsToFit, { padding: [20, 20] });
+        } else {
+            modalMap.setView([lat, lng], 14); 
+        }
+        
+    }, 250); 
+}
+// ----------------------------------------------------------------------
+
+
+
+
+// Pulisci mappa quando modal si chiude
+document.getElementById('areaDetailModal')?.addEventListener('hidden.bs.modal', function() {
+    if (modalMap) {
+        modalMap.remove();
+        modalMap = null;
+    }
+});
+
+
+</script>
+{% endblock %}

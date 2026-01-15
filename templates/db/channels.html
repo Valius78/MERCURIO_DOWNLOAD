@@ -1,0 +1,1000 @@
+{% extends "base.html" %}
+
+{% block head %}
+    {{ super() }}
+   <!-- ReadingsVisualizer -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.1/dist/chartjs-adapter-moment.min.js"></script>
+	<!--<script src="{{ url_for('static', filename='js/readings_visualizer.js') }}"></script>-->
+	
+
+{% endblock %}
+
+{% block title %}Gestione Channels{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header con statistiche -->
+    <div class="row mb-4">
+        <div class="col">
+            <h1><i class="fas fa-satellite-dish"></i> Canali</h1>
+            <p class="text-muted">Gestione delle variabili di misurazione e dei flussi di dati rilevati dagli Items.</p>
+        </div>
+        <div class="col-auto">
+            <div class="btn-group" role="group">
+			 
+                <button class="btn btn-outline-secondary" onclick="toggleMapView()">
+                    <i class="fas fa-globe"></i> Vista Mappa
+                </button>
+            </div>
+        </div>
+    </div>
+
+   <div class="stats-row mb-4">
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center text-white">
+                <i class="fas fa-satellite-dish fa-2x mb-2"></i>
+                <h3 class="mb-0">{{ channels|length }}</h3>
+                <small>Channels collegati</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center text-white">
+                <i class="fas fa-check-circle fa-2x mb-2"></i>
+                <h3 class="mb-0">{{ channels|selectattr('status', 'equalto', true)|list|length }}</h3>
+                <small>Canali attivi</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center text-white">
+                <i class="fas fa-wave-square fa-2x mb-2"></i>
+                <h3 class="mb-0">{{ channels|selectattr('is_continuous', 'equalto', true)|list|length }}</h3>
+                <small>Canali continui</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center text-white">
+                <i class="fas fa-map-marker-alt fa-2x mb-2"></i>
+                <h3 class="mb-0">{{ channels|selectattr('longitude')|list|length }}</h3>
+                <small>Siti di acquisizione</small>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+    <!-- Filtri e Ricerca -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-2">
+                            <label class="form-label">Ricerca</label>
+                            <input type="text" id="searchChannels" class="form-control" 
+                                   placeholder="Nome, descrizione, codice...">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Scenari</label>
+                            <select id="filterScenario" class="form-select">
+                                <option value="">Tutti</option>
+                                {% if filter_options and filter_options.scenarios %}
+                                {% for scenario in filter_options.scenarios %}
+                                <option value="{{ scenario.name }}">{{ scenario.name }}</option>
+                                {% endfor %}
+                                {% endif %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Aree</label>
+                            <select id="filterArea" class="form-select">
+                                <option value="">Tutte</option>
+                                {% if filter_options and filter_options.areas %}
+                                {% for area in filter_options.areas %}
+                                <option value="{{ area.name }}">{{ area.name }}</option>
+                                {% endfor %}
+                                {% endif %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Items</label>
+                            <select id="filterItem" class="form-select">
+                                <option value="">Tutti</option>
+                                {% if filter_options and filter_options.item_list %}
+                                {% for item in filter_options.item_list %}
+                                <option value="{{ item.item_id }}">{{ item.name }} ({{ item.code }})</option>
+                                {% endfor %}
+                                {% endif %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Misure</label>
+                            <select id="filterMeasurement" class="form-select">
+                                <option value="">Tutte</option>
+                                {% if filter_options and filter_options.measurements %}
+                                {% for measurement in filter_options.measurements %}
+                                <option value="{{ measurement.name }}">{{ measurement.name }}</option>
+                                {% endfor %}
+                                {% endif %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Stato</label>
+                            <select id="filterStatus" class="form-select">
+                                <option value="">Tutti</option>
+                                <option value="active">Attivi</option>
+                                <option value="inactive">Inattivi</option>
+                            </select>
+                        </div>
+					 <button id="resetFiltersBtn" class="btn btn-outline-secondary w-100">
+							<i class="fas fa-undo"></i> Reset Filtri
+						</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vista Mappa (nascosta inizialmente) -->
+    <div id="mapView" class="card mb-4" style="display: none;">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="fas fa-map"></i> Mappa Channels 
+                <span class="badge bg-primary" id="mapChannelsCount">{{ channels|length }}</span>
+            </h5>
+            <div>
+                <div class="btn-group btn-group-sm me-2" role="group">
+                    <button type="button" class="btn btn-outline-secondary" onclick="fitAllChannels()">
+                        <i class="fas fa-expand-arrows-alt"></i> Mostra Tutti
+                    </button>
+                    <button type="button" class="btn btn-outline-info" onclick="centerOnItaly()">
+                        <i class="fas fa-home"></i> Italia
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" onclick="toggleMapStyle()">
+                        <i class="fas fa-layer-group"></i> Stile
+                    </button>
+                </div>
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick="toggleMapView()">
+                    <i class="fas fa-times"></i> Chiudi
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div id="channelsMap" style="height: 500px; position: relative;">
+                <div id="mapLoadingOverlay" class="d-flex align-items-center justify-content-center h-100 bg-light">
+                    <div class="text-center">
+                        <i class="fas fa-spinner fa-spin fa-2x text-primary mb-2"></i>
+                        <p class="text-muted">Caricamento mappa...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card-footer">
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="d-flex flex-wrap gap-2">
+                        <small class="badge bg-success"><i class="fas fa-circle"></i> Continui</small>
+                        <small class="badge bg-warning"><i class="fas fa-circle"></i> Discreti</small>
+                        <small class="badge bg-info"><i class="fas fa-circle"></i> Periodici</small>
+                        <small class="badge bg-secondary"><i class="fas fa-circle"></i> Non Definiti</small>
+                    </div>
+                </div>
+                <div class="col-md-4 text-end">
+                    <small class="text-muted">
+                        Clicca sui marker per vedere i dettagli
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista Channels -->
+    {% if channels %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list"></i> Lista Canali 
+                        <span class="badge bg-secondary" id="listChannelsCount">{{ channels|length }}</span>
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="channelsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Canale</th>
+                                    <th>Item</th>
+                                    <th>Configurazione</th>
+                                    <th>Posizione</th>
+                                    <th>Stato</th>
+                                    <th>Azioni</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for channel in channels %}
+                                <tr data-scenario="{{ channel.scenario_name or '' }}"
+                                    data-area="{{ channel.area_name or '' }}"
+                                    data-item="{{ channel.item_id or '' }}"
+                                    data-measurement="{{ channel.measurement_name or '' }}"
+                                    data-status="{{ 'active' if channel.status else 'inactive' }}"
+                                    data-search="{{ (channel.name|lower) + ' ' + (channel.description|lower if channel.description else '') + ' ' + (channel.code|lower if channel.code else '') }}">
+                                    
+                                    <!-- Info Channel -->
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="me-3">
+                                                <i class="fas fa-satellite-dish text-primary" title="Channel"></i>
+                                            </div>
+                                            <div>
+                                                <strong>{{ channel.name }}</strong>
+                                                <br>
+                                                <code class="badge bg-dark">{{ channel.code }}</code>
+                                                {% if channel.description %}
+                                                <br><small class="text-muted">{{ channel.description[:50] }}{% if channel.description|length > 50 %}...{% endif %}</small>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    
+                                    <!-- Info Item -->
+                                    <td>
+                                        <div>
+                                            <strong>{{ channel.item_name or 'N/A' }}</strong>
+                                            {% if channel.item_code %}
+                                            <br><code class="text-muted">{{ channel.item_code }}</code>
+                                            {% endif %}
+                                            {% if channel.area_name %}
+                                            <br><small class="text-muted">
+                                                <i class="fas fa-map"></i> {{ channel.scenario_name }}/{{ channel.area_name }}
+                                            </small>
+                                            {% endif %}
+                                            {% if channel.measurement_name %}
+                                            <br><small class="text-info">
+                                                <i class="fas fa-ruler"></i> {{ channel.measurement_name }}
+                                            </small>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+
+                                    <!-- Configurazione -->
+                                    <td>
+										<div>
+											<span class="badge bg-success">{{ channel.acquisition_type or 'continuous' }}</span>
+											{% if channel.acq_frequency %}
+											<br><small>
+												<i class="fas fa-clock"></i> 
+												<span class="acquisition-time" data-seconds="{{ channel.acq_frequency }}">{{ channel.acq_frequency }}</span>
+											</small>
+											{% endif %}
+										</div>
+									</td>
+
+                                    <!-- Posizione -->
+                                    <td>
+                                        {% if channel.longitude and channel.latitude %}
+                                        <small>
+                                            <i class="fas fa-globe"></i>
+                                            {{ "%.6f"|format(channel.longitude) }},<br>
+                                            {{ "%.6f"|format(channel.latitude) }}
+                                            {% if channel.elevation_m %}
+                                            <br><i class="fas fa-mountain"></i> {{ channel.elevation_m }} m
+                                            {% endif %}
+                                        </small>
+                                        {% else %}
+                                        <span class="text-muted">Non definita</span>
+                                        {% endif %}
+                                    </td>
+
+                                    <!-- Stato -->
+                                    <td>
+                                        {% if channel.status %}
+                                        <span class="badge bg-success"><i class="fas fa-check"></i> Attivo</span>
+                                        {% else %}
+                                        <span class="badge bg-danger"><i class="fas fa-times"></i> Inattivo</span>
+                                        {% endif %}
+                                    </td>
+
+                                    <!-- Azioni -->
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{{ url_for('channels.edit_channel', channel_id=channel.channel_id) }}" 
+                                               class="btn btn-outline-primary" title="Dettagli">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+											
+											
+                                            
+                                            <button class="btn btn-outline-info" 
+                                                    onclick="showMetadata('{{ channel.channel_id }}', '{{ channel.name }}')" 
+                                                    title="Visualizza metadata">
+                                                <i class="fas fa-tags"></i>
+                                            </button>
+											<button type="button" 
+													class="btn btn-outline-success" 
+													title="Visualizza Dati Canale"
+													onclick="showChannelData({{ channel.channel_id }}, '{{ channel.name|replace("'", "\\'") }}')">
+												<i class="fas fa-chart-area"></i>
+											</button>
+                                            
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- Stato vuoto -->
+    <div class="text-center py-5">
+        <div class="card">
+            <div class="card-body">
+                <i class="fas fa-satellite-dish fa-4x text-muted mb-3"></i>
+                <h4 class="text-muted">Nessun Channel Configurato</h4>
+                <p class="text-muted">
+                    Inizia creando il primo channel per un item esistente
+                </p>
+                <div class="mt-3">
+                    <a href="{{ url_for('channels.new_channel') }}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Crea Primo Channel
+                    </a>
+                </div>
+                <div class="mt-3">
+                    <small class="text-muted">
+                        <strong>Prerequisiti:</strong> Assicurati di aver creato almeno un Item prima di creare channels.
+                        <br>
+                        <a href="{{ url_for('items.items') }}" class="text-decoration-none">Vai agli Items →</a>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Modal per conferma eliminazione -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Conferma Eliminazione</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Sei sicuro di voler eliminare il channel <strong id="deleteChannelName"></strong>?</p>
+                <p class="text-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Attenzione:</strong> Questa azione non può essere annullata.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <form id="deleteForm" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash"></i> Elimina Channel
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal per visualizzazione metadata -->
+<div class="modal fade" id="metadataModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-tags"></i> Metadata Channel: <span id="metadataChannelName"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="metadataContent" class="bg-light p-3 rounded"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentFilteredChannels = {{ channels|tojson|safe }};
+
+// Conferma eliminazione
+function confirmDelete(channelId, channelName) {
+    document.getElementById('deleteChannelName').textContent = channelName;
+    document.getElementById('deleteForm').action = '/channels/delete/' + channelId;
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+
+// Visualizza metadata
+function showMetadata(channelId, channelName) {
+   console.log('=== DEBUG CHANNELS METADATA ===');
+   console.log('Channel ID ricevuto:', channelId, typeof channelId);
+   
+   document.getElementById('metadataChannelName').textContent = channelName;
+   
+   const channels = {{ channels | tojson }};
+   console.log('Array channels:', channels);
+   
+   const chanId = parseInt(channelId);
+   console.log('Channel ID convertito:', chanId);
+   
+   const channel = channels.find(c => {
+       console.log('Confronto:', c.channel_id, 'con', chanId, 'uguali?', c.channel_id === chanId);
+       return c.channel_id === chanId;
+   });
+   
+   console.log('Channel trovato:', channel);
+   
+   if (channel) {
+       console.log('Metadata del channel:', channel.metadata);
+       console.log('Tipo metadata:', typeof channel.metadata);
+       
+       if (channel.metadata && Object.keys(channel.metadata).length > 0) {
+           let metadata = channel.metadata;
+           if (typeof metadata === 'string') {
+               try {
+                   metadata = JSON.parse(metadata);
+               } catch (e) {
+                   console.log('Errore parse JSON:', e);
+               }
+           }
+           
+           document.getElementById('metadataContent').textContent = 
+               JSON.stringify(metadata, null, 2);
+       } else {
+           console.log('Metadata vuoti o non presenti');
+           document.getElementById('metadataContent').textContent = 'Nessun metadata disponibile';
+       }
+   } else {
+       console.log('Channel non trovato nell\'array');
+       document.getElementById('metadataContent').textContent = 'Channel non trovato';
+   }
+   
+   new bootstrap.Modal(document.getElementById('metadataModal')).show();
+}
+
+// === FILTRI DINAMICI E STATICI UNIFICATI ===
+document.addEventListener('DOMContentLoaded', function() {
+    const filterRelations = {{ filter_relations | tojson | safe }};
+    const scenarioSelect = document.getElementById('filterScenario');
+    const areaSelect = document.getElementById('filterArea');
+    const itemSelect = document.getElementById('filterItem');
+    const measurementSelect = document.getElementById('filterMeasurement');
+    const statusSelect = document.getElementById('filterStatus');
+    const searchField = document.getElementById('searchChannels');
+	
+	
+	document.querySelectorAll('.acquisition-time').forEach(function(span) {
+        const seconds = parseFloat(span.getAttribute('data-seconds'));
+        span.textContent = formatAcquisitionTime(seconds);
+    });
+
+    // Funzione per aggiornare le opzioni di un select
+    function updateSelectOptions(selectElement, options, valueKey, textKey) {
+        const currentValue = selectElement.value;
+        const firstOption = selectElement.options[0];
+        selectElement.innerHTML = '';
+        selectElement.appendChild(firstOption);
+
+        const uniqueOptions = new Map();
+        options.forEach(option => {
+            const value = option[valueKey];
+            const text = option[textKey];
+            if (value && text && !uniqueOptions.has(value)) {
+                uniqueOptions.set(value, text);
+            }
+        });
+
+        uniqueOptions.forEach((text, value) => {
+            const optionElement = document.createElement('option');
+            optionElement.value = value;
+            optionElement.textContent = text;
+            selectElement.appendChild(optionElement);
+        });
+
+        if (currentValue && Array.from(selectElement.options).some(opt => opt.value === currentValue)) {
+            selectElement.value = currentValue;
+        } else {
+            selectElement.value = '';
+        }
+    }
+
+    // Funzione per aggiornare tutti i filtri in base allo stato corrente
+    function updateAllFilters() {
+        const selectedScenario = scenarioSelect.value;
+        const selectedArea = areaSelect.value;
+        const selectedItem = itemSelect.value;
+        const selectedMeasurement = measurementSelect.value;
+
+        const filteredRelations = filterRelations.filter(relation => {
+            return (!selectedScenario || relation.scenario_name === selectedScenario) &&
+                   (!selectedArea || relation.area_name === selectedArea) &&
+                   (!selectedItem || relation.item_id.toString() === selectedItem) &&
+                   (!selectedMeasurement || relation.measurement_name === selectedMeasurement);
+        });
+
+        const areas = filteredRelations.map(r => ({ name: r.area_name, display: r.area_name }));
+        updateSelectOptions(areaSelect, areas, 'name', 'display');
+
+        const items = filteredRelations.map(r => ({ item_id: r.item_id, display: `${r.item_name} (${r.item_code})` }));
+        updateSelectOptions(itemSelect, items, 'item_id', 'display');
+
+        const measurements = filteredRelations.map(r => ({ name: r.measurement_name, display: r.measurement_name }));
+        updateSelectOptions(measurementSelect, measurements, 'name', 'display');
+
+        applyFilters();
+    }
+
+    // Funzione per applicare i filtri alla tabella e aggiornare mappa
+    function applyFilters() {
+        const search = searchField.value.toLowerCase();
+        const scenario = scenarioSelect.value;
+        const area = areaSelect.value;
+        const item = itemSelect.value;
+        const measurement = measurementSelect.value;
+        const status = statusSelect.value;
+
+        const rows = document.querySelectorAll('tbody tr[data-scenario]');
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            const rowScenario = row.dataset.scenario || '';
+            const rowArea = row.dataset.area || '';
+            const rowItem = row.dataset.item || '';
+            const rowMeasurement = row.dataset.measurement || '';
+            const rowStatus = row.dataset.status || '';
+            const rowSearch = row.dataset.search || '';
+
+            const matchesSearch = !search || rowSearch.includes(search);
+            const matchesScenario = !scenario || rowScenario === scenario;
+            const matchesArea = !area || rowArea === area;
+            const matchesItem = !item || rowItem === item;
+            const matchesMeasurement = !measurement || rowMeasurement === measurement;
+            const matchesStatus = !status || rowStatus === status;
+
+            if (matchesSearch && matchesScenario && matchesArea && matchesItem && matchesMeasurement && matchesStatus) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        const listCounter = document.getElementById('listChannelsCount');
+        if (listCounter) {
+            listCounter.textContent = visibleCount;
+        }
+
+        // aggiorna array filtrato per la mappa
+		const allChannels = {{ channels|tojson|safe }};
+		currentFilteredChannels = allChannels.filter(channel => {
+			const searchContent = `${channel.name} ${channel.description || ''} ${channel.code || ''}`.toLowerCase();
+			const scenarioVal = channel.scenario_name || '';
+			const areaVal = channel.area_name || '';
+			const itemVal = channel.item_id ? channel.item_id.toString() : '';
+			const measurementVal = channel.measurement_name || '';
+			const statusVal = channel.status ? 'active' : 'inactive';
+			
+			const matchesSearch = !search || searchContent.includes(search);
+			const matchesScenario = !scenario || scenarioVal === scenario;
+			const matchesArea = !area || areaVal === area;
+			const matchesItem = !item || itemVal === item;
+			const matchesMeasurement = !measurement || measurementVal === measurement;
+			const matchesStatus = !status || statusVal === status;
+			
+			return matchesSearch && matchesScenario && matchesArea && matchesItem && matchesMeasurement && matchesStatus;
+		});
+
+        // Aggiorna la mappa se visibile
+        const mapView = document.getElementById('mapView');
+        if (mapView && mapView.style.display !== 'none' && typeof window.updateChannelsMapView === 'function') {
+            window.updateChannelsMapView();
+        }
+    }
+	
+	function resetAllFilters() {
+		// 1️⃣ Resetta tutti i filtri
+		searchField.value = '';
+		scenarioSelect.value = '';
+		areaSelect.value = '';
+		itemSelect.value = '';
+		measurementSelect.value = '';
+		statusSelect.value = '';
+
+		// 2️⃣ Ripristina tutte le select senza applicare filtri
+		updateSelectOptions(areaSelect, filterRelations.map(r => ({ name: r.area_name, display: r.area_name })), 'name', 'display');
+		updateSelectOptions(itemSelect, filterRelations.map(r => ({ item_id: r.item_id, display: `${r.item_name} (${r.item_code})` })), 'item_id', 'display');
+		updateSelectOptions(measurementSelect, filterRelations.map(r => ({ name: r.measurement_name, display: r.measurement_name })), 'name', 'display');
+
+		// 3️⃣ Mostra tutte le righe della tabella
+		const rows = document.querySelectorAll('tbody tr[data-scenario]');
+		rows.forEach(row => row.style.display = '');
+		document.getElementById('listChannelsCount').textContent = rows.length;
+
+		// 4️⃣ Ripristina tutti i channels per la mappa
+		currentFilteredChannels = {{ channels|tojson|safe }};
+		window.ChannelsMap.currentFilteredChannels = currentFilteredChannels;
+
+		// 5️⃣ Ridisegna la mappa se visibile
+		const mapView = document.getElementById('mapView');
+		if (mapView && mapView.style.display !== 'none' && typeof window.updateChannelsMapView === 'function') {
+			window.updateChannelsMapView();
+			if (window.ChannelsMap.markersCluster && window.ChannelsMap.markersCluster.getLayers().length > 0) {
+				window.ChannelsMap.map.fitBounds(window.ChannelsMap.markersCluster.getBounds(), { padding: [20, 20] });
+			}
+		}
+	}
+
+
+
+
+    // Event listeners per tutti i filtri
+    scenarioSelect.addEventListener('change', updateAllFilters);
+    areaSelect.addEventListener('change', updateAllFilters);
+    itemSelect.addEventListener('change', updateAllFilters);
+    measurementSelect.addEventListener('change', updateAllFilters);
+    statusSelect.addEventListener('change', applyFilters);
+    searchField.addEventListener('input', applyFilters);
+	const resetBtn = document.getElementById('resetFiltersBtn');
+	if (resetBtn) resetBtn.addEventListener('click', resetAllFilters);
+
+    window.applyFilters = applyFilters;
+    window.updateAllFilters = updateAllFilters;
+});
+</script>
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+<link rel="stylesheet" href="{{ url_for('static', filename='css/map-common.css') }}" />
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/readings_visualizer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/map-common.js') }}"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+<script>
+window.ChannelsMap = window.ChannelsMap || {
+    map: null,
+    markersCluster: null,
+    channelMarkers: [],
+    currentFilteredChannels: {{ channels|tojson|safe }},
+    channelsConfig: {
+        entityType: 'channel',
+        entitiesProperty: 'channels',
+        markerPrefix: 'channel-marker',
+        mapContainerId: 'channelsMap',
+        loadingOverlayId: 'mapLoadingOverlay',
+        counterElementId: 'mapChannelsCount',
+        listCounterElementId: 'listChannelsCount',
+        defaultColor: '#17a2b8',
+        popupBuilder: {
+            single: function(channel) {
+                return `
+                    <div class="popup-content">
+                        <div class="popup-header">
+                            <i class="fas fa-satellite-dish"></i> ${channel.name}
+                        </div>
+                        <div class="popup-badges">
+                            <span class="badge bg-primary">${channel.code || channel.channel_id}</span>
+                            ${channel.acquisition_type ? `<span class="badge bg-${channel.acquisition_type === 'continuous' ? 'success' : channel.acquisition_type === 'discrete' ? 'warning' : 'info'}">${channel.acquisition_type}</span>` : ''}
+                            ${channel.status ? '<span class="badge bg-success">Attivo</span>' : '<span class="badge bg-danger">Inattivo</span>'}
+                        </div>
+                        <div class="small mb-2">
+                            <div><strong>Scenario:</strong> ${channel.scenario_name || 'N/A'}</div>
+                            <div><strong>Area:</strong> ${channel.area_name || 'N/A'}</div>
+                            <div><strong>Item:</strong> ${channel.item_name || 'N/A'}</div>
+                            ${channel.measurement_name ? `<div><strong>Misurazione:</strong> ${channel.measurement_name}</div>` : ''}
+                            
+                            ${channel.elevation_m ? `<div><strong>Quota:</strong> ${channel.elevation_m} m</div>` : ''}
+                            ${channel.acq_frequency ? `<div><strong>Frequenza:</strong> ${channel.acq_frequency} Hz</div>` : ''}
+                        </div>
+                        <div class="popup-actions">
+                            <a href="/channels/edit/${channel.channel_id}" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-edit"></i> Dettagli
+                            </a>
+                        </div>
+                    </div>
+                `;
+            },
+            multi: function(channels) {
+                const channelsList = channels.map(channel => `
+                    <div class="border-bottom py-2">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <strong>${channel.name}</strong>
+                                <br><span class="badge bg-primary">${channel.code || channel.channel_id}</span>
+                                ${channel.status ? '<span class="badge bg-success">Attivo</span>' : '<span class="badge bg-danger">Inattivo</span>'}
+                                <br><small class="text-muted">${channel.item_name || 'N/A'} • ${channel.data_type || 'N/A'}</small>
+                            </div>
+                            <div class="text-end">
+                                <a href="/channels/edit/${channel.channel_id}" class="btn btn-xs btn-outline-primary">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                return `
+                    <div class="popup-content">
+                        <div class="popup-header text-center">
+                            <i class="fas fa-layer-group"></i> ${channels.length} canali in questa posizione
+                        </div>
+                        <div style="max-height: 200px; overflow-y: auto;">
+                            ${channelsList}
+                        </div>
+                        <div class="popup-actions mt-2">
+                            <small class="text-muted">Canali con coordinate identiche o molto vicine</small>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+    }
+};
+
+// ==================================================
+// MODALI
+// ==================================================
+function confirmDelete(channelId, channelName) {
+    document.getElementById('deleteChannelName').textContent = channelName;
+    document.getElementById('deleteForm').action = '/channels/delete/' + channelId;
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+
+
+// ==================================================
+// FILTRI DINAMICI
+// ==================================================
+document.addEventListener('DOMContentLoaded', function() {
+    const filterRelations = {{ filter_relations | tojson | safe }};
+    const scenarioSelect = document.getElementById('filterScenario');
+    const areaSelect = document.getElementById('filterArea');
+    const itemSelect = document.getElementById('filterItem');
+    const measurementSelect = document.getElementById('filterMeasurement');
+    const statusSelect = document.getElementById('filterStatus');
+    const searchField = document.getElementById('searchChannels');
+
+    function updateSelectOptions(selectElement, options, valueKey, textKey) {
+        const currentValue = selectElement.value;
+        selectElement.innerHTML = '';
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = selectElement.dataset.default || 'Tutti';
+        selectElement.appendChild(defaultOption);
+
+        const uniqueOptions = new Map();
+        options.forEach(option => {
+            const value = option[valueKey];
+            const text = option[textKey];
+            if (value && text && !uniqueOptions.has(value)) uniqueOptions.set(value, text);
+        });
+
+        uniqueOptions.forEach((text, value) => {
+            const opt = document.createElement('option');
+            opt.value = value;
+            opt.textContent = text;
+            selectElement.appendChild(opt);
+        });
+
+        if (currentValue && Array.from(selectElement.options).some(opt => opt.value === currentValue)) {
+            selectElement.value = currentValue;
+        } else {
+            selectElement.value = '';
+        }
+    }
+
+    function applyFilters() {
+        const search = searchField.value.toLowerCase();
+        const scenario = scenarioSelect.value;
+        const area = areaSelect.value;
+        const item = itemSelect.value;
+        const measurement = measurementSelect.value;
+        const status = statusSelect.value;
+
+        const rows = document.querySelectorAll('tbody tr[data-scenario]');
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            const rowScenario = row.dataset.scenario || '';
+            const rowArea = row.dataset.area || '';
+            const rowItem = row.dataset.item || '';
+            const rowMeasurement = row.dataset.measurement || '';
+            const rowStatus = row.dataset.status || '';
+            const rowSearch = row.dataset.search || '';
+
+            const match = (!search || rowSearch.includes(search)) &&
+                          (!scenario || rowScenario === scenario) &&
+                          (!area || rowArea === area) &&
+                          (!item || rowItem === item) &&
+                          (!measurement || rowMeasurement === measurement) &&
+                          (!status || rowStatus === status);
+
+            row.style.display = match ? '' : 'none';
+            if (match) visibleCount++;
+        });
+
+        document.getElementById('listChannelsCount').textContent = visibleCount;
+
+        window.ChannelsMap.currentFilteredChannels = currentFilteredChannels.filter(channel => {
+            const searchContent = `${channel.name} ${channel.description || ''} ${channel.code || ''}`.toLowerCase();
+            const scenarioVal = channel.scenario_name || '';
+            const areaVal = channel.area_name || '';
+            const itemVal = channel.item_id ? channel.item_id.toString() : '';
+            const measurementVal = channel.measurement_name || '';
+            const statusVal = channel.status ? 'active' : 'inactive';
+
+            return (!search || searchContent.includes(search)) &&
+                   (!scenario || scenarioVal === scenario) &&
+                   (!area || areaVal === area) &&
+                   (!item || itemVal === item) &&
+                   (!measurement || measurementVal === measurement) &&
+                   (!status || statusVal === status);
+        });
+
+        if (document.getElementById('mapView').style.display !== 'none') {
+            updateChannelsMapView();
+        }
+    }
+
+    function updateAllFilters() {
+        const selectedScenario = scenarioSelect.value;
+        const selectedArea = areaSelect.value;
+        const selectedItem = itemSelect.value;
+        const selectedMeasurement = measurementSelect.value;
+
+        const filteredRelations = filterRelations.filter(relation => {
+            return (!selectedScenario || relation.scenario_name === selectedScenario) &&
+                   (!selectedArea || relation.area_name === selectedArea) &&
+                   (!selectedItem || relation.item_id.toString() === selectedItem) &&
+                   (!selectedMeasurement || relation.measurement_name === selectedMeasurement);
+        });
+
+        updateSelectOptions(areaSelect, filteredRelations.map(r => ({ name: r.area_name, display: r.area_name })), 'name', 'display');
+        updateSelectOptions(itemSelect, filteredRelations.map(r => ({ item_id: r.item_id, display: `${r.item_name} (${r.item_code})` })), 'item_id', 'display');
+        updateSelectOptions(measurementSelect, filteredRelations.map(r => ({ name: r.measurement_name, display: r.measurement_name })), 'name', 'display');
+
+        applyFilters();
+    }
+
+    scenarioSelect.addEventListener('change', updateAllFilters);
+    areaSelect.addEventListener('change', updateAllFilters);
+    itemSelect.addEventListener('change', updateAllFilters);
+    measurementSelect.addEventListener('change', updateAllFilters);
+    statusSelect.addEventListener('change', applyFilters);
+    searchField.addEventListener('input', applyFilters);
+
+    window.applyFilters = applyFilters;
+    window.updateAllFilters = updateAllFilters;
+});
+
+// ==================================================
+// MAPPA
+// ==================================================
+function toggleMapView() {
+    const mapView = document.getElementById('mapView');
+
+    if (mapView.style.display === 'none') {
+        // 👉 Aggiorna i filtri prima di mostrare la mappa
+        if (typeof window.applyFilters === 'function') window.applyFilters();
+
+        mapView.style.display = 'block';
+        mapView.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        if (!window.ChannelsMap.map) {
+            setTimeout(async () => {
+                await initializeChannelsMap();
+                if (typeof window.updateChannelsMapView === 'function') {
+                    window.updateChannelsMapView();
+                }
+            }, 0);
+        } else {
+            setTimeout(() => {
+                window.ChannelsMap.map.invalidateSize();
+
+                // 👉 Aggiorna la mappa con i dati filtrati
+                if (typeof window.updateChannelsMapView === 'function') {
+                    window.updateChannelsMapView();
+                }
+
+                if (window.ChannelsMap.markersCluster && window.ChannelsMap.markersCluster.getLayers().length > 0) {
+                    window.ChannelsMap.map.fitBounds(window.ChannelsMap.markersCluster.getBounds(), { padding: [20, 20] });
+                }
+            }, 100);
+        }
+    } else {
+        mapView.style.display = 'none';
+    }
+}
+
+async function initializeChannelsMap() {
+    try {
+        const result = await window.MapCommon.initializeEntityMap(window.ChannelsMap.channelsConfig);
+        window.ChannelsMap.map = result.map;
+        window.ChannelsMap.markersCluster = result.markersCluster;
+        window.ChannelsMap.channelsConfig.mapInstance = window.ChannelsMap.map;
+
+        await window.MapCommon.loadEntitiesOnMap(window.ChannelsMap.currentFilteredChannels, window.ChannelsMap.channelsConfig, window.ChannelsMap.markersCluster, window.ChannelsMap.channelMarkers);
+
+        if (window.ChannelsMap.channelMarkers.length > 0) {
+            fitAllChannels();
+        }
+    } catch(error) {
+        console.error('Errore inizializzazione mappa channels:', error);
+    }
+}
+
+function fitAllChannels() {
+    window.MapCommon.fitAllEntities(window.ChannelsMap.map, window.ChannelsMap.markersCluster);
+}
+
+function centerOnItaly() {
+    window.MapCommon.centerOnItaly(window.ChannelsMap.map);
+}
+
+function toggleMapStyle() {
+    window.MapCommon.toggleMapStyle(window.ChannelsMap.map);
+}
+
+function updateChannelsMapView() {
+    if (window.ChannelsMap.map && window.ChannelsMap.markersCluster) {
+        window.MapCommon.loadEntitiesOnMap(window.ChannelsMap.currentFilteredChannels, window.ChannelsMap.channelsConfig, window.ChannelsMap.markersCluster, window.ChannelsMap.channelMarkers);
+    }
+}
+
+// Esporta funzioni globali
+window.toggleMapView = toggleMapView;
+window.fitAllChannels = fitAllChannels;
+window.centerOnItaly = centerOnItaly;
+window.updateChannelsMapView = updateChannelsMapView;
+window.toggleMapStyle = toggleMapStyle;
+window.confirmDelete = confirmDelete;
+window.showMetadata = showMetadata;
+
+function formatAcquisitionTime(seconds) {
+    if (seconds === null || seconds === undefined) {
+        return 'N/A';
+    }
+    const sec = parseInt(seconds, 10);
+    if (sec < 60) {
+        return sec + ' sec';
+    } else if (sec < 3600) {
+        const minutes = Math.round(sec / 60);
+        return minutes + ' min';
+    } else if (sec < 86400) {
+        const hours = Math.round(sec / 3600);
+        return hours + ' ore';
+    } else {
+        const days = Math.round(sec / 86400);
+        return days + ' giorni';
+    }
+}
+
+</script>
+
+{% endblock %}
+{% endblock %}

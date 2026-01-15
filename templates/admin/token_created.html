@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Token Creato - Mercurio{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+
+        <!-- Card principale token -->
+        <div class="card border-success">
+            <div class="card-header bg-success text-white">
+                <h4 class="mb-0">
+                    <i class="fas fa-check-circle"></i> Token Creato con Successo!
+                </h4>
+            </div>
+            <div class="card-body">
+
+                <!-- Avviso importante -->
+                <div class="card mb-4 border-warning">
+                    <div class="card-body d-flex align-items-start">
+                        <i class="fas fa-exclamation-triangle me-2 text-warning fa-lg"></i>
+                        <div>
+                            <strong>ATTENZIONE:</strong> Questo è l'unico momento in cui vedrai il token completo. 
+                            Salvalo immediatamente in un posto sicuro!
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Descrizione -->
+                <div class="mb-4">
+                    <label class="form-label"><strong>Descrizione:</strong></label>
+                    <p class="form-control-plaintext">{{ description }}</p>
+                </div>
+
+                <!-- Token API -->
+                <div class="mb-4">
+                    <label class="form-label"><strong>Il tuo Token API:</strong></label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="tokenValue" 
+                               value="{{ token }}" readonly 
+                               style="font-family: monospace; font-size: 0.9rem;">
+                        <button class="btn btn-outline-secondary" type="button" 
+                                onclick="copyToken()" id="copyBtn">
+                            <i class="fas fa-copy"></i> Copia
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Come utilizzare il token -->
+                <div class="card mb-4 border-info">
+                    <div class="card-body">
+                        <h6><i class="fas fa-info-circle"></i> Come utilizzare il token:</h6>
+                        <p class="mb-2">Includi il token nell'header delle tue richieste API:</p>
+                        <pre class="mb-0"><code>Authorization: Bearer {{ token }}</code></pre>
+                    </div>
+                </div>
+
+                <!-- Esempio curl -->
+                <div class="card mb-4 border-secondary">
+                    <div class="card-body">
+                        <h6><i class="fas fa-code"></i> Esempio con curl:</h6>
+                        <pre class="mb-0"><code>curl -H "Authorization: Bearer {{ token }}" \
+http://localhost:5000/api/readings</code></pre>
+                    </div>
+                </div>
+
+                <!-- Bottoni -->
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <a href="{{ url_for('admin.my_tokens') }}" class="btn btn-primary">
+                        <i class="fas fa-list"></i> Gestisci Token
+                    </a>
+                    <a href="{{ url_for('admin.my_profile') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-user"></i> Torna al Profilo
+                    </a>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+
+
+
+<script>
+function copyToken() {
+    const tokenInput = document.getElementById('tokenValue');
+    tokenInput.select();
+    tokenInput.setSelectionRange(0, 99999); // Per mobile
+    
+    navigator.clipboard.writeText(tokenInput.value).then(function() {
+        const copyBtn = document.getElementById('copyBtn');
+        const originalText = copyBtn.innerHTML;
+        copyBtn.innerHTML = '<i class="fas fa-check"></i> Copiato!';
+        copyBtn.classList.remove('btn-outline-secondary');
+        copyBtn.classList.add('btn-success');
+        
+        setTimeout(function() {
+            copyBtn.innerHTML = originalText;
+            copyBtn.classList.remove('btn-success');
+            copyBtn.classList.add('btn-outline-secondary');
+        }, 2000);
+    });
+}
+</script>
+{% endblock %}

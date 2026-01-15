@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+
+{% block title %}Il Mio Profilo - Mercurio{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1>
+            <i class="fas fa-user-cog"></i>
+            Il Mio Profilo
+        </h1>
+        <p class="text-muted">Gestisci le tue informazioni personali e impostazioni account</p>
+    </div>
+
+</div>
+
+<!-- Flash Messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+{% for category, message in messages %}
+<div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+    <i class="fas fa-{{ 'exclamation-triangle' if category == 'error' else 'check-circle' if category == 'success' else 'info-circle' }}"></i>
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
+{% endwith %}
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Informazioni Personali -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-user"></i> Informazioni Personali</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('admin.update_my_profile') }}">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="nome" class="form-label">Nome *</label>
+                                <input type="text" class="form-control" id="nome" name="nome" 
+                                       value="{{ user.nome }}" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="cognome" class="form-label">Cognome *</label>
+                                <input type="text" class="form-control" id="cognome" name="cognome" 
+                                       value="{{ user.cognome }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" 
+                               value="{{ user.email }}" readonly 
+                               style="background-color: #f8f9fa;">
+                        <div class="form-text">
+                            <i class="fas fa-info-circle"></i> 
+                            L'email non può essere modificata. Contatta un amministratore se necessario.
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="ente_azienda" class="form-label">Ente/Azienda</label>
+                        <input type="text" class="form-control" id="ente_azienda" name="ente_azienda" 
+                               value="{{ user.ente_azienda or '' }}" 
+                               placeholder="Es: Università, Azienda, Organizzazione">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salva Modifiche
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Cambio Password -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-lock"></i> Cambia Password</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('admin.change_my_password') }}" id="passwordForm">
+                    <div class="mb-3">
+                        <label for="current_password" class="form-label">Password Corrente *</label>
+                        <input type="password" class="form-control" id="current_password" 
+                               name="current_password" required>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="new_password" class="form-label">Nuova Password *</label>
+                                <input type="password" class="form-control" id="new_password" 
+                                       name="new_password" required minlength="6">
+                                <div class="form-text">Minimo 6 caratteri</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="confirm_password" class="form-label">Conferma Nuova Password *</label>
+                                <input type="password" class="form-control" id="confirm_password" 
+                                       name="confirm_password" required minlength="6">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Importante:</strong> Dopo aver cambiato la password dovrai rifare il login.
+                    </div>
+                    
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-key"></i> Cambia Password
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <!-- Informazioni Account -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-info-circle"></i> Informazioni Account</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Ruolo</label>
+                    <div>
+                        <span class="badge bg-{{ 'warning' if user.role_name == 'administrator' else 'info' if user.role_name == 'user' else 'secondary' }} fs-6">
+                            {{ user.role_name or 'Nessuno' }}
+                        </span>
+                    </div>
+                    <small class="text-muted">{{ user.role_description or 'Nessuna descrizione' }}</small>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Stato Account</label>
+                    <div>
+                        <span class="badge bg-{{ 'success' if user.is_active else 'secondary' }} fs-6">
+                            {{ 'Attivo' if user.is_active else 'Disattivo' }}
+                        </span>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <div class="mb-2">
+                    <strong>Account creato:</strong><br>
+                    <small class="text-muted">
+                        {{ user.created_at.strftime('%d/%m/%Y alle %H:%M') if user.created_at }}
+                    </small>
+                </div>
+                
+                <div class="mb-2">
+                    <strong>Ultimo accesso:</strong><br>
+                    <small class="text-muted">
+                        {% if user.last_login %}
+                            {{ user.last_login.strftime('%d/%m/%Y alle %H:%M') }}
+                        {% else %}
+                            Primo accesso
+                        {% endif %}
+                    </small>
+                </div>
+            </div>
+			<!-- Token API -->
+			<div class="card mb-4">
+				<div class="card-header">
+					<h5 class="mb-0"><i class="fas fa-key"></i> Token API</h5>
+				</div>
+				<div class="card-body">
+					<div class="mb-3">
+						<div class="d-flex justify-content-between align-items-center">
+							<span>Token Attivi:</span>
+							<span class="badge bg-info" id="tokenCount">...</span>
+						</div>
+					</div>
+					
+					<div class="d-grid gap-2">
+						<a href="{{ url_for('admin.my_tokens') }}" class="btn btn-outline-primary">
+							<i class="fas fa-cogs"></i> Gestisci Token
+						</a>
+						
+						<button type="button" class="btn btn-success btn-sm" 
+								data-bs-toggle="modal" data-bs-target="#newTokenModal">
+							<i class="fas fa-plus"></i> Nuovo Token
+						</button>
+					</div>
+					
+					<div class="mt-2">
+						<small class="text-muted">
+							<i class="fas fa-info-circle"></i> 
+							I token permettono l'accesso API senza login
+						</small>
+					</div>
+				</div>
+			</div>
+        </div>
+        
+       
+    </div>
+</div>
+<!-- Modal Nuovo Token -->
+<div class="modal fade" id="newTokenModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Crea Nuovo Token API</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('admin.create_my_token') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Descrizione Token *</label>
+                        <input type="text" class="form-control" id="description" name="description" 
+                               required maxlength="100" 
+                               placeholder="Es: Script Python lettura dati, App mobile, Dashboard aziendale">
+                        <div class="form-text">Descrizione per riconoscere il token (max 100 caratteri)</div>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Attenzione:</strong> Il token sarà mostrato una sola volta dopo la creazione. Salvalo in un posto sicuro!
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-key"></i> Crea Token
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+// Validazione form password
+document.getElementById('passwordForm').addEventListener('submit', function(e) {
+    const newPassword = document.getElementById('new_password').value;
+    const confirmPassword = document.getElementById('confirm_password').value;
+    
+    if (newPassword !== confirmPassword) {
+        e.preventDefault();
+        alert('Le nuove password non coincidono!');
+        return false;
+    }
+    
+    if (newPassword.length < 6) {
+        e.preventDefault();
+        alert('La nuova password deve essere almeno 6 caratteri!');
+        return false;
+    }
+    
+    // Conferma cambio password
+    if (!confirm('Sei sicuro di voler cambiare la password? Dovrai rifare il login.')) {
+        e.preventDefault();
+        return false;
+    }
+});
+</script>
+{% endblock %}

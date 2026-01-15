@@ -1,0 +1,324 @@
+﻿<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Mercurio Database Manager{% endblock %}</title>
+    
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" rel="stylesheet">
+    
+    <style>
+	.sidebar {
+		background: linear-gradient(135deg, #2c3e50 0%, #3498db 50%, #34495e 100%);
+		min-height: 100vh;
+	}
+    .sidebar .nav-link {
+        color: rgba(255,255,255,0.8);
+        border-radius: 8px;
+        margin: 2px 0;
+    }
+    .sidebar .nav-link:hover, .sidebar .nav-link.active {
+        background: rgba(255,255,255,0.2);
+        color: white;
+    }
+	.main-content {
+		background: #f8f9fa;
+		min-height: 100vh;
+	}
+    
+    /* === STILI EFFETTO VETRO SMERIGLIATO === */
+	.card {
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+		border: 1px solid rgba(52, 152, 219, 0.1);
+		background: rgba(255, 255, 255, 0.95);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
+		border-radius: 8px;
+		/* NON aggiungiamo max-width qui per non limitare "Attività Recente" */
+	}
+	
+	.card-container {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 1rem;
+		justify-content: flex-start;
+		align-items: stretch;
+	}
+
+	.card-container .card {
+		flex: 0 0 auto;
+	}
+
+	.alert {
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+		border: 1px solid rgba(52, 152, 219, 0.15);
+		background-color: rgba(255, 255, 255, 0.95) !important;
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
+		border-radius: 6px;
+		padding: 0.75rem 1rem; /* Padding ridotto */
+	}
+    
+    /* Manteniamo il gradiente della stats-card, ma con un'ombra coerente */
+	.stats-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem; /* <- Riduci lo spazio tra le card QUI */
+		margin-bottom: 1rem;
+	}
+
+	.stats-item-7x {
+		width: calc(14.28% - 0.4rem); /* 7 card per riga */
+		min-width: 120px; /* per device piccoli */
+	}
+
+	.stats-card {
+		background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+		color: white;
+		box-shadow: 0 2px 8px rgba(52, 152, 219, 0.25);
+		border: none;
+		border-radius: 8px;
+		min-height: 120px;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.stats-card .card-body {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		padding: 0.6rem 0.4rem;
+	}
+
+	.list-group-item {
+		background: rgba(255, 255, 255, 0.1);
+	}
+
+    /* === STILI ORIGINALI E DI UTILITY === */
+    .map-container {
+        height: 400px;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .upload-area {
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    .upload-area:hover {
+        background-color: rgba(0, 123, 255, 0.05);
+    }
+    .upload-area.border-success {
+        background-color: rgba(25, 135, 84, 0.05);
+    }
+	
+	@media (max-width: 1200px) {
+		.stats-row {
+			flex-wrap: wrap;
+		}
+		.stats-row .col-md-2 {
+			flex: 1 1 calc(50% - 0.25rem);
+			max-width: calc(50% - 0.25rem);
+		}
+	}
+
+	@media (max-width: 768px) {
+		.stats-row .col-md-2 {
+			flex: 1 1 100%;
+			max-width: 100%;
+		}
+	}
+</style>
+    
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-2 sidebar p-3">
+                <div class="text-center mb-4">
+                    <h4 class="text-white"><i class="fas fa-database"></i> MERCURIO</h4>
+                    <small class="text-white-50">Database Manager</small>
+					
+					<!-- NUOVO: Indicatore utente con link profilo -->
+					{% if session.user_name %}
+					<div class="mt-2 p-2" style="background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);">
+						<small class="text-white" style="font-weight: 500;">
+							<i class="fas fa-user-circle"></i> {{ session.user_name }}
+						</small>
+						{% if session.user_role == 'administrator' %}
+						<br><span class="badge mt-1" style="background: #ffc107; color: #000; font-size: 0.7rem; font-weight: 600;">ADMIN</span>
+						{% endif %}
+						
+						<!-- NUOVO: Link al profilo -->
+						<br><a href="{{ url_for('admin.my_profile') }}" class="text-white mt-1 d-inline-block me-2" 
+							   style="font-size: 0.8rem; text-decoration: none; opacity: 0.9;" 
+							   onmouseover="this.style.opacity='1'" 
+							   onmouseout="this.style.opacity='0.9'"
+							   title="Il mio profilo">
+							<i class="fas fa-user-cog"></i> Profilo
+						</a>
+						
+						<a href="{{ url_for('auth.logout') }}" class="text-white mt-1 d-inline-block" 
+						   style="font-size: 0.8rem; text-decoration: none; opacity: 0.9;" 
+						   onmouseover="this.style.opacity='1'" 
+						   onmouseout="this.style.opacity='0.9'">
+							<i class="fas fa-sign-out-alt"></i> Logout
+						</a>
+					</div>
+					{% else %}
+					<div class="mt-2 p-2" style="background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.3);">
+						<a href="{{ url_for('auth.login') }}" class="text-white d-block" 
+						   style="font-size: 0.9rem; text-decoration: none; font-weight: 500;" 
+						   onmouseover="this.style.opacity='0.8'" 
+						   onmouseout="this.style.opacity='1'">
+							<i class="fas fa-sign-in-alt"></i> Accedi
+						</a>
+					</div>
+					{% endif %}
+                </div>
+                
+            	<nav class="nav flex-column">
+					<a class="nav-link {% if request.endpoint == 'index' %}active{% endif %}" href="{{ url_for('index') }}">
+						<i class="fas fa-home"></i> Dashboard
+					</a>
+					<a class="nav-link {% if request.endpoint and 'scenarios' in request.endpoint %}active{% endif %}" href="{{ url_for('scenarios.scenarios') }}">
+						<i class="fas fa-globe-americas"></i> Scenari
+					</a>
+					<a class="nav-link {% if request.endpoint and 'areas' in request.endpoint %}active{% endif %}" href="{{ url_for('areas.areas') }}">
+						<i class="fas fa-map-marker-alt"></i> Aree
+					</a>
+					<a class="nav-link {% if request.endpoint and 'systems' in request.endpoint %}active{% endif %}" href="{{ url_for('systems.systems') }}">
+						<i class="fas fa-cogs"></i> Sistemi
+					</a>
+					<a class="nav-link {% if request.endpoint and 'measurements' in request.endpoint %}active{% endif %}" href="{{ url_for('measurements.measurements') }}">
+						<i class="fas fa-ruler-combined"></i> Misure
+					</a>
+					<a class="nav-link {% if request.endpoint and 'items' in request.endpoint %}active{% endif %}" href="{{ url_for('items.items') }}">
+						<i class="fas fa-microchip"></i> Items
+					</a>
+					<a class="nav-link {% if request.endpoint and 'channels' in request.endpoint %}active{% endif %}" href="{{ url_for('channels.channels') }}">
+						<i class="fas fa-microchip"></i> Canali
+					</a>
+					<a class="nav-link {% if request.endpoint and 'parameters' in request.endpoint %}active{% endif %}" href="{{ url_for('parameters.parameters') }}">
+						<i class="fas fa-microchip"></i> Parametri
+					</a>
+					<a class="nav-link {% if request.endpoint and 'scheduler' in request.endpoint %}active{% endif %}" href="{{ url_for('scheduler_viewer.scheduler_dashboard') }}">
+						<i class="fas fa-clock me-2"></i> Scheduler
+					</a>
+					
+					<!-- GESTIONE UTENTI - Solo per Administrator -->
+					{% if user_permissions.show_admin_pages %}
+					<a class="nav-link" href="{{ url_for('admin.users') }}">
+						<i class="fas fa-users me-2"></i>Gestione Utenti
+					</a>
+					{% endif %}
+					
+					<!-- GESTIONE TOKEN GLOBALE - Solo per Administrator -->
+					{% if user_permissions.show_admin_pages %}
+					<a class="nav-link" href="{{ url_for('admin.admin_all_tokens') }}">
+						<i class="fas fa-key me-2"></i>Token
+					</a>
+					{% endif %}
+
+									
+				
+					
+				</nav>
+            </div>
+            
+            <div class="col-md-10 main-content p-4">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            {% if category == 'error' %}
+                                {% set alert_class = 'alert-danger' %}
+                                {% set icon = 'fas fa-exclamation-triangle' %}
+                            {% elif category == 'warning' %}
+                                {% set alert_class = 'alert-warning' %}
+                                {% set icon = 'fas fa-exclamation-circle' %}
+                            {% elif category == 'success' %}
+                                {% set alert_class = 'alert-success' %}
+                                {% set icon = 'fas fa-check-circle' %}
+                            {% else %}
+                                {% set alert_class = 'alert-info' %}
+                                {% set icon = 'fas fa-info-circle' %}
+                            {% endif %}
+                            
+                            <div class="alert {{ alert_class }} alert-dismissible fade show" role="alert">
+                                <i class="{{ icon }}"></i>
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+                
+                {% block content %}{% endblock %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script> -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    
+    {% block scripts %}{% endblock %}
+
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+	
+    <script>
+        // Global utility functions
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('it-IT') + ' ' + date.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'});
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        // Auto-hide alerts after 5 seconds
+        document.addEventListener('DOMContentLoaded', function() {
+            const alerts = document.querySelectorAll('.alert:not(.alert-danger)');
+            alerts.forEach(alert => {
+                setTimeout(() => {
+                    const bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                }, 5000);
+            });
+        });
+        
+        // Prevent double form submission
+        document.addEventListener('DOMContentLoaded', function() {
+            const forms = document.querySelectorAll('form');
+            forms.forEach(form => {
+                form.addEventListener('submit', function() {
+                    const submitBtn = form.querySelector('button[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.disabled = true;
+                        const originalText = submitBtn.innerHTML;
+                        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Elaborando...';
+                        
+                        // Re-enable after 5 seconds as failsafe
+                        setTimeout(() => {
+                            submitBtn.disabled = false;
+                            submitBtn.innerHTML = originalText;
+                        }, 5000);
+                    }
+                });
+            });
+        });
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

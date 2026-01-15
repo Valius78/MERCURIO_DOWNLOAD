@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Scenario - Mercurio{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-globe-americas"></i> Scenario</h1>
+        <p class="text-muted">Gestione siti di monitoraggio</p>
+    </div>
+
+</div>
+
+{% if scenarios %}
+<div class="row">
+    {% for scenario in scenarios %}
+    <div class="col-md-6 col-lg-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                
+				<div class="d-flex justify-content-between align-items-start mb-2">
+					<h5 class="card-title mb-0">
+						<i class="fas fa-map-marker-alt text-primary"></i> 
+						{{ scenario.name }}
+					</h5>
+					<div>
+						{% if scenario.code %}
+							<span class="badge bg-primary">{{ scenario.code }}</span>
+						{% endif %}
+					</div>
+				</div>
+                
+                <div class="mb-2 text-muted small" 
+                     style="height: 3.5em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
+                    {{ scenario.description or 'Nessuna descrizione' }}
+                </div>
+                <div class="small text-muted mb-3">
+                    <i class="fas fa-map-pin"></i> 
+                    {{ "%.6f"|format(scenario.latitude) }}, {{ "%.6f"|format(scenario.longitude) }}
+                </div>
+                
+                {% if scenario.metadata %}
+                {% set meta = scenario.metadata %}
+                <div class="small text-muted mb-3">
+                    {% if meta.project_code %}
+                        <span class="badge bg-secondary">{{ meta.project_code }}</span>
+                    {% endif %}
+                    {% if meta.client %}
+                        <span class="badge bg-info">{{ meta.client }}</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+                
+                <div class="small text-muted mb-2">
+					<i class="fas fa-calendar"></i> 
+					{% if scenario.metadata and scenario.metadata.start_date %}
+						Creato il : {{ scenario.metadata.start_date }}
+					{% else %}
+						Creato: {{ scenario.created_at.strftime('%d/%m/%Y') if scenario.created_at else 'N/A' }}
+					{% endif %}
+				</div>
+            </div>
+            
+            <div class="card-footer bg-transparent">
+                <div class="btn-group w-100">
+                    <a href="{{ url_for('scenarios.edit_scenario', scenario_id=scenario.scenario_id) }}" 
+                       class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-edit"></i> Info
+                    </a>
+                    <button class="btn btn-sm btn-outline-secondary" 
+                            onclick="viewOnMap({{ scenario.latitude }}, {{ scenario.longitude }}, '{{ scenario.name }}')">
+                        <i class="fas fa-map"></i> Mappa
+                    </button>
+					
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-5">
+    <i class="fas fa-globe-americas fa-5x text-muted mb-4"></i>
+    <h3 class="text-muted">Nessun scenario trovato</h3>
+    <p class="text-muted">Inizia creando il tuo primo scenario</p>
+    <a href="{{ url_for('new_scenario') }}" class="btn btn-primary">
+        <i class="fas fa-plus"></i> Crea Primo Scenario
+    </a>
+</div>
+{% endif %}
+
+<div class="modal fade" id="mapModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-map"></i> <span id="mapTitle"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modalMap" style="height: 400px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let modalMap = null;
+
+function viewOnMap(lat, lng, name) {
+    document.getElementById('mapTitle').textContent = name;
+    
+    const modal = new bootstrap.Modal(document.getElementById('mapModal'));
+    modal.show();
+    
+    // Aspetta che il modal sia completamente aperto
+    document.getElementById('mapModal').addEventListener('shown.bs.modal', function () {
+        if (modalMap) {
+            modalMap.remove();
+        }
+        
+        modalMap = L.map('modalMap').setView([lat, lng], 15);
+        
+
+		// Layer mappa
+		const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+			attribution: '&copy; OpenStreetMap contributors'
+		});
+		
+		const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+			attribution: 'Tiles &copy; Esri'
+		});
+
+		satellite.addTo(modalMap);
+		
+		// Controllo layer
+		L.control.layers({
+			"OpenStreetMap": osm,
+			"Satellite": satellite
+		}).addTo(modalMap);
+		
+        
+        L.marker([lat, lng])
+            .addTo(modalMap)
+            .bindPopup(`<b>${name}</b><br>Lat: ${lat}<br>Lng: ${lng}`)
+            .openPopup();
+    }, { once: true });
+}
+</script>
+{% endblock %}

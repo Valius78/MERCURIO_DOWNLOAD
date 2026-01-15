@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Mercurio{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-tachometer-alt"></i> Dashboard</h1>
+        <p class="text-muted">Panoramica generale database MERCURIO</p>
+    </div>
+</div>
+
+<!-- STATISTICHE PRINCIPALI -->
+<div class="stats-row">
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-globe-americas fa-2x mb-2"></i>
+                <h3>{{ stats['scenarios'][0].count if stats['scenarios'] else 0 }}</h3>
+                <p class="mb-0">Scenari</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-map-marker-alt fa-2x mb-2"></i>
+                <h3>{{ stats['areas'][0].count if stats['areas'] else 0 }}</h3>
+                <p class="mb-0">Aree</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-cogs fa-2x mb-2"></i>
+                <h3>{{ stats['systems'][0].count if stats['systems'] else 0 }}</h3>
+                <p class="mb-0">Sistemi</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-ruler-combined fa-2x mb-2"></i>
+                <h3>{{ stats['measurements'][0].count if stats['measurements'] else 0 }}</h3>
+                <p class="mb-0">Misure</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-microchip fa-2x mb-2"></i>
+                <h3>{{ stats['items'][0].count if stats['items'] else 0 }}</h3>
+                <p class="mb-0">Items</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-broadcast-tower fa-2x mb-2"></i>
+                <h3>{{ stats['channels'][0].count if stats['channels'] else 0 }}</h3>
+                <p class="mb-0">Canali</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-broadcast-tower fa-2x mb-2"></i>
+                <h3>{{ stats['parameters'][0].count if stats['parameters'] else 0 }}</h3>
+                <p class="mb-0">Parametri</p>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-clock"></i> Attività Recente</h5>
+            </div>
+            <div class="card-body">
+                {% if recent_activity %}
+                <div class="list-group list-group-flush">
+                    {% for activity in recent_activity %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            {% if activity.type == 'scenario' %}
+                                <i class="fas fa-globe-americas text-info"></i>
+                                <strong>Scenario:</strong> {{ activity.name }}
+                                {% if activity.code %}<span class="badge bg-secondary ms-1">{{ activity.code }}</span>{% endif %}
+                            {% elif activity.type == 'area' %}
+                                <i class="fas fa-map-marker-alt text-primary"></i>
+                                <strong>Area:</strong> {{ activity.name }}
+                                {% if activity.code %}<span class="badge bg-secondary ms-1">{{ activity.code }}</span>{% endif %}
+                            {% elif activity.type == 'item' %}
+                                <i class="fas fa-microchip text-success"></i>
+                                <strong>Item:</strong> {{ activity.name }}
+                                {% if activity.code %}<span class="badge bg-info ms-1">{{ activity.code }}</span>{% endif %}
+                            {% elif activity.type == 'measurement' %}
+                                <i class="fas fa-ruler-combined text-warning"></i>
+                                <strong>Measurement:</strong> {{ activity.name }}
+                                {% if activity.system_name %}<span class="badge bg-primary ms-1">{{ activity.system_name }}</span>{% endif %}
+                                {% if activity.code %}<span class="badge bg-secondary ms-1">{{ activity.code }}</span>{% endif %}
+                            {% elif activity.type == 'channel' %}
+                                <i class="fas fa-broadcast-tower text-dark"></i>
+                                <strong>Channel:</strong> {{ activity.name }}
+                                {% if activity.code %}<span class="badge bg-info ms-1">{{ activity.code }}</span>{% endif %}
+                            {% elif activity.type == 'parameter' %}
+                                <i class="fas fa-sliders-h text-purple"></i>
+                                <strong>Parameter:</strong> {{ activity.name }}
+                                {% if activity.code %}<span class="badge bg-warning ms-1">{{ activity.code }}</span>{% endif %}
+                            {% endif %}
+                        </div>
+                        <small class="text-muted">
+                            {{ activity.created_at.strftime('%d/%m/%Y %H:%M') if activity.created_at else 'N/A' }}
+                        </small>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted text-center">Nessuna attività recente</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-info-circle"></i> Stato Sistema</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <h6>Database</h6>
+                    <p><span class="badge bg-success">MERCURIO</span> Connesso</p>
+                </div>
+                
+                <div class="mb-3">
+                    <h6>Struttura</h6>
+                    <small class="text-muted">
+                        Scenario → Area → Sensore<br>
+                        Sistema → Misura → Sensore<br>
+                        Sensore → Canale → Parametro
+                    </small>
+                </div>
+            </div>
+        </div>
+        
+        
+    </div>
+</div>
+
+
+{% endblock %}

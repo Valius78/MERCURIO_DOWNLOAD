@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block title %}I Miei Token API - Mercurio{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1>
+            <i class="fas fa-key"></i>
+            I Miei Token API
+        </h1>
+        <p class="text-muted">Gestisci i tuoi token per l'accesso alle API senza login</p>
+    </div>
+    <div class="col-auto">
+        <button type="button" class="btn btn-primary" 
+                data-bs-toggle="modal" data-bs-target="#newTokenModal">
+            <i class="fas fa-plus"></i> Nuovo Token
+        </button>
+        <a href="{{ url_for('admin.my_profile') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Torna al Profilo
+        </a>
+    </div>
+</div>
+
+<!-- Flash Messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+{% for category, message in messages %}
+<div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+    <i class="fas fa-{{ 'exclamation-triangle' if category == 'error' else 'check-circle' if category == 'success' else 'info-circle' }}"></i>
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
+{% endwith %}
+
+<!-- Statistiche Token -->
+<div class="stats-row mb-4">
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-key fa-2x text-primary text-white mb-2"></i>
+                <h3>{{ tokens|length }}</h3>
+                <p class="mb-0">Token Totali</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-check-circle fa-2x text-success text-white mb-2"></i>
+                <h3>{{ tokens|selectattr('is_active')|list|length }}</h3>
+                <p class="mb-0">Token Attivi</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-item-7x">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <i class="fas fa-chart-line fa-2x text-info text-white mb-2"></i>
+                <h3>{{ tokens|sum(attribute='request_count') }}</h3>
+                <p class="mb-0">Richieste Totali</p>
+            </div>
+        </div>
+    </div>
+
+</div>
+<!-- Lista Token -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-list"></i> I Tuoi Token
+        </h5>
+    </div>
+    <div class="card-body p-0">
+        {% if tokens %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Descrizione</th>
+                        <th>Stato</th>
+                        <th>Creato</th>
+                        <th>Ultimo Uso</th>
+                        <th>Richieste</th>
+                        <th class="text-center">Azioni</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for token in tokens %}
+                    <tr class="{{ 'table-warning' if not token.is_active else '' }}">
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="me-3">
+                                    <i class="fas fa-key fa-lg text-{{ 'success' if token.is_active else 'secondary' }}"></i>
+                                </div>
+                                <div>
+                                    <h6 class="mb-0">{{ token.description or token.token_name or 'Token senza descrizione' }}</h6>
+                                    <small class="text-muted">ID: {{ token.token_id }}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ 'success' if token.is_active else 'secondary' }}">
+                                {{ 'Attivo' if token.is_active else 'Revocato' }}
+                            </span>
+                        </td>
+                        <td>
+                            <small>{{ token.created_at.strftime('%d/%m/%Y %H:%M') if token.created_at }}</small>
+                        </td>
+                        <td>
+                            {% if token.last_used %}
+                            <small>{{ token.last_used.strftime('%d/%m/%Y %H:%M') }}</small>
+                            {% else %}
+                            <small class="text-muted">Mai utilizzato</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-info">{{ token.request_count or 0 }}</span>
+                        </td>
+                        <td class="text-center">
+                            <div class="btn-group btn-group-sm" role="group">
+                                {% if token.is_active %}
+                                <!-- Revoca Token -->
+                                <form method="POST" action="{{ url_for('admin.revoke_my_token', token_id=token.token_id) }}" 
+                                      class="d-inline" onsubmit="return confirm('Sei sicuro di voler revocare questo token?')">
+                                    <button type="submit" class="btn btn-outline-warning" title="Revoca token">
+                                        <i class="fas fa-pause"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                                
+                                <!-- Elimina Token -->
+                                <form method="POST" action="{{ url_for('admin.delete_my_token', token_id=token.token_id) }}" 
+                                      class="d-inline" onsubmit="return confirm('Sei sicuro di voler eliminare definitivamente questo token?')">
+                                    <button type="submit" class="btn btn-outline-danger" title="Elimina definitivamente">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-key fa-3x text-muted mb-3"></i>
+            <p class="text-muted">Non hai ancora creato nessun token API</p>
+            <button type="button" class="btn btn-success" 
+                    data-bs-toggle="modal" data-bs-target="#newTokenModal">
+                <i class="fas fa-plus"></i> Crea il tuo primo token
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal Nuovo Token -->
+<div class="modal fade" id="newTokenModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Crea Nuovo Token API</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('admin.create_my_token') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Descrizione Token *</label>
+                        <input type="text" class="form-control" id="description" name="description" 
+                               required maxlength="100" 
+                               placeholder="Es: Script Python lettura dati, App mobile, Dashboard aziendale">
+                        <div class="form-text">Nome descrittivo per riconoscere il token (max 100 caratteri)</div>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Importante:</strong> Il token sarà mostrato una sola volta dopo la creazione. Salvalo in un posto sicuro!
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Utilizzo:</strong> Usa il token nell'header HTTP<br>
+                        <code>Authorization: Bearer TUO_TOKEN_QUI</code>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-key"></i> Crea Token
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
