@@ -1,6 +1,6 @@
 /**
- * TRAFFIC INDICATOR COMPONENT - VERSIONE CORRETTA
- * Corregge il problema di caching che impediva l'aggiornamento dopo download
+ * TRAFFIC INDICATOR COMPONENT - VERSIONE CORRETTA PER SIDEBAR
+ * Corregge il problema di posizionamento e di caching che impediva l'aggiornamento dopo download
  */
 
 class TrafficIndicator {
@@ -13,7 +13,7 @@ class TrafficIndicator {
         
         // Stato cache per evitare aggiornamenti UI inutili
         this.lastStatusHash = null;
-        this.forceNextUpdate = false; // 🔧 NUOVO: Flag per forzare aggiornamento
+        this.forceNextUpdate = false; // 🔧 Flag per forzare aggiornamento
     }
     
     /**
@@ -21,7 +21,7 @@ class TrafficIndicator {
      */
     async initialize() {
         try {
-            // Crea container indicatore
+            // Crea container indicatore nella sidebar
             this.createContainer();
             
             // Carica status iniziale (SENZA usare traffic control manager per init)
@@ -61,7 +61,7 @@ class TrafficIndicator {
     }
     
     /**
-     * Crea container HTML per indicatore
+     * 🔧 CORRETTO: Crea container HTML nella sidebar vicino profilo/logout
      */
     createContainer() {
         // Rimuovi container esistente
@@ -69,27 +69,36 @@ class TrafficIndicator {
         if (existing) existing.remove();
         
         const html = `
-            <div id="traffic-indicator" class="d-none d-lg-flex align-items-center me-3" style="display: none !important;">
-                <div class="d-flex align-items-center p-2 rounded" style="background: rgba(0,0,0,0.1); min-width: 200px;">
-                    <i class="fas fa-tachometer-alt me-2 text-primary"></i>
+            <div id="traffic-indicator" class="traffic-indicator mt-2 p-2" style="background: rgba(255,255,255,0.1); border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-tachometer-alt me-2 text-white" style="font-size: 0.9rem;"></i>
                     <div class="flex-grow-1">
-                        <div class="progress" style="height: 4px;">
-                            <div class="progress-bar bg-success" style="width: 0%"></div>
+                        <div class="progress mb-1" style="height: 4px; background: rgba(255,255,255,0.2);">
+                            <div class="progress-bar bg-light" style="width: 0%"></div>
                         </div>
-                        <small class="traffic-text text-muted">Caricamento...</small>
+                        <small class="traffic-text text-white" style="font-size: 0.7rem; opacity: 0.9;">Caricamento...</small>
                     </div>
                 </div>
-                <div id="traffic-debug" class="ms-2 small text-muted" style="display: none;"></div>
+                <div id="traffic-debug" class="mt-1 small text-white" style="display: none; font-size: 0.6rem; opacity: 0.7;"></div>
             </div>
         `;
         
-        // Cerca navbar per inserimento
-        const navbar = document.querySelector('.navbar-nav');
-        if (navbar) {
-            navbar.insertAdjacentHTML('beforeend', `<li class="nav-item">${html}</li>`);
+        // 🔧 CORREZIONE: Cerca il contenitore utente nella sidebar
+        const userContainer = document.querySelector('.sidebar div.mt-2.p-2');
+        if (userContainer && userContainer.innerHTML.includes('fas fa-user-circle')) {
+            // Inserisci DOPO il container utente
+            userContainer.insertAdjacentHTML('afterend', html);
         } else {
-            // Fallback: inserisci nel body
-            document.body.insertAdjacentHTML('afterbegin', html);
+            // Fallback: cerca la sidebar e inserisci prima del nav
+            const sidebar = document.querySelector('.sidebar');
+            const nav = sidebar ? sidebar.querySelector('nav') : null;
+            if (nav) {
+                nav.insertAdjacentHTML('beforebegin', html);
+            } else {
+                // Ultimo fallback: inserisci nel body
+                console.warn('⚠️ Sidebar non trovata, inserisco nel body');
+                document.body.insertAdjacentHTML('afterbegin', html);
+            }
         }
         
         this.container = document.getElementById('traffic-indicator');
@@ -97,101 +106,86 @@ class TrafficIndicator {
         // Aggiungi click handler per toggle debug (admin feature)
         if (this.container) {
             this.container.addEventListener('click', (e) => {
-                if (e.altKey && e.shiftKey) { // Alt+Shift+Click per debug
+                if (e.ctrlKey) { // Solo con Ctrl+click per evitare click accidentali
                     this.toggleDebugInfo();
                 }
             });
         }
+        
+        console.log('🚦 Container traffic indicator creato');
     }
     
     /**
-     * Aggiorna status traffico - METODO PRINCIPALE CORRETTO
+     * Avvia auto-refresh
+     */
+    startAutoRefresh() {
+        if (this.refreshInterval) return;
+        
+        this.refreshInterval = setInterval(() => {
+            this.updateStatus();
+        }, 30000); // 30 secondi
+        
+        console.log('🔄 Auto-refresh traffic indicator attivato');
+    }
+    
+    /**
+     * Ferma auto-refresh
+     */
+    stopAutoRefresh() {
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+            this.refreshInterval = null;
+        }
+    }
+    
+    /**
+     * Aggiorna status traffico con cache intelligente
      */
     async updateStatus() {
         try {
-            const statusResponse = await this.apiClient.getTrafficStatus();
+            const status = await this.apiClient.getTrafficStatus();
             
-            if (statusResponse.status === 'success') {
-                const status = statusResponse.traffic_status;
-                
-                // Calcola hash dello stato per rilevare cambiamenti
-                const statusHash = this.calculateStatusHash(status);
-                
-                // 🔧 CORREZIONE: Aggiorna se è cambiato qualcosa O se forzato
-                if (statusHash !== this.lastStatusHash || this.forceNextUpdate) {
-                    this.renderStatus(status);
-                    this.lastStatusHash = statusHash;
-                    this.forceNextUpdate = false; // Reset flag
-                    
-                    // Aggiorna debug info se visibile
-                    this.updateDebugInfo();
-                    
-                    console.log(`📊 Traffic UI aggiornata: ${status.used_mb.toFixed(1)}MB, ${status.download_count} download`);
-                } else {
-                    console.log('📊 Status traffico invariato, skip render UI');
-                }
-                
-                this.show();
-            } else {
-                this.hide();
+            // ✅ Controlla se dobbiamo forzare update o se è cambiato
+            const statusHash = JSON.stringify(status);
+            if (!this.forceNextUpdate && statusHash === this.lastStatusHash) {
+                console.log('📊 Status traffico invariato, skip render UI');
+                return;
             }
             
+            this.lastStatusHash = statusHash;
+            this.forceNextUpdate = false; // Reset flag
+            
+            this.renderStatus(status);
+            this.show();
+            
+            console.log('📊 Traffic UI aggiornata:', `${status.used_mb?.toFixed(1) || 0}MB`, `${status.download_count || 0} download`);
+            
         } catch (error) {
-            console.error('Errore aggiornamento traffic status:', error);
+            console.warn('⚠️ Errore aggiornamento traffic status:', error);
             this.hide();
-            this.showError('Errore traffico');
-        }
-    }
-
-    /**
-     * Aggiornamento immediato - ORA COORDINATO CON FORZA
-     */
-    async updateStatusNow() {
-        console.log('🔄 Aggiornamento traffic status richiesto manualmente...');
-        
-        // 🔧 FORZA il prossimo aggiornamento
-        this.forceNextUpdate = true;
-        
-        if (this.trafficControlManager) {
-            // Usa il traffic control manager per coordinare l'aggiornamento
-            this.trafficControlManager.scheduleTrafficUpdate('manual_request');
-        } else {
-            // Fallback: aggiornamento diretto
-            console.log('🔄 Aggiornamento diretto traffic status (no manager)...');
-            await this.updateStatus();
         }
     }
     
     /**
-     * Calcola hash dello status per rilevare cambiamenti
-     */
-    calculateStatusHash(status) {
-        const key = `${status.used_mb}_${status.remaining_mb}_${status.download_count}_${status.is_unlimited}`;
-        return btoa(key); // Base64 semplice per hash
-    }
-    
-    /**
-     * Renderizza status nella UI - OTTIMIZZATO
+     * Render status con UI adatta alla sidebar
      */
     renderStatus(status) {
         if (!this.container) return;
         
-        const { user_id, limit_mb, used_mb, remaining_mb, download_count, is_unlimited } = status;
-        
         const textEl = this.container.querySelector('.traffic-text');
         const progressBar = this.container.querySelector('.progress-bar');
         
-        if (is_unlimited) {
-            // Utente illimitato
-            const displayText = `<strong>Illimitato</strong> (${used_mb.toFixed(1)} MB • ${download_count} DL)`;
-            textEl.innerHTML = displayText;
-            progressBar.style.width = '0%';
-            progressBar.className = 'progress-bar bg-primary';
-            
-        } else if (limit_mb > 0) {
-            // Utente con limite
+        if (!textEl || !progressBar) {
+            console.warn('⚠️ Elementi UI traffic indicator non trovati');
+            return;
+        }
+        
+        const { used_mb = 0, limit_mb = null, is_unlimited = false, download_count = 0 } = status;
+        
+        if (!is_unlimited && limit_mb > 0) {
             const percentage = Math.min((used_mb / limit_mb) * 100, 100);
-            const remainingFormatted = remaining_mb ? remaining_mb.toFixed(1) : '0.0';
+            const remaining_mb = Math.max(limit_mb - used_mb, 0);
+            const remainingFormatted = remaining_mb > 0 ? remaining_mb.toFixed(1) : '0.0';
             
             textEl.innerHTML = `<strong>${remainingFormatted} MB</strong> (${download_count} DL)`;
             progressBar.style.width = `${percentage}%`;
@@ -202,13 +196,13 @@ class TrafficIndicator {
             } else if (percentage >= 70) {
                 progressBar.className = 'progress-bar bg-warning';
             } else {
-                progressBar.className = 'progress-bar bg-success';
+                progressBar.className = 'progress-bar bg-light';
             }
         } else {
-            // Fallback
+            // Fallback per utenti illimitati
             textEl.innerHTML = `${used_mb.toFixed(1)} MB (${download_count} DL)`;
             progressBar.style.width = '0%';
-            progressBar.className = 'progress-bar bg-secondary';
+            progressBar.className = 'progress-bar bg-light';
         }
     }
     
@@ -238,11 +232,9 @@ class TrafficIndicator {
             this.trafficControlManager.getStatus() : { message: 'Non disponibile' };
         
         debugEl.innerHTML = `
-            TCM: ${tcmStatus.isUpdating ? 'Updating' : 'Idle'} | 
-            Queue: ${tcmStatus.queueLength || 0} | 
-            Active: ${tcmStatus.activeDownloads || 0} | 
-            Last: ${this.lastStatusHash?.substring(0, 8) || 'None'} |
-            Force: ${this.forceNextUpdate}
+            TCM: ${tcmStatus.isUpdating ? 'Aggiornando...' : 'Idle'}<br>
+            Cache: ${this.lastStatusHash ? 'OK' : 'Vuota'}<br>
+            Force: ${this.forceNextUpdate ? 'SI' : 'NO'}
         `;
     }
     
@@ -267,50 +259,6 @@ class TrafficIndicator {
     }
     
     /**
-     * Mostra errore temporaneo
-     */
-    showError(message) {
-        if (!this.container) return;
-        
-        const textEl = this.container.querySelector('.traffic-text');
-        const progressBar = this.container.querySelector('.progress-bar');
-        
-        textEl.innerHTML = `<span style="color: #ff6b6b;">${message}</span>`;
-        progressBar.style.width = '0%';
-        progressBar.className = 'progress-bar bg-danger';
-        
-        this.show();
-        
-        // Ripristina dopo 3 secondi
-        setTimeout(() => {
-            this.forceUpdate(); // 🔧 Usa forceUpdate invece di updateStatus
-        }, 3000);
-    }
-    
-    /**
-     * Avvia auto-refresh (SOLO se non c'è TrafficControlManager)
-     */
-    startAutoRefresh() {
-        this.stopAutoRefresh(); // Clear esistente
-        
-        this.refreshInterval = setInterval(() => {
-            if (!this.trafficControlManager) {
-                this.updateStatus();
-            }
-        }, 30000); // 30 secondi
-    }
-    
-    /**
-     * Ferma auto-refresh
-     */
-    stopAutoRefresh() {
-        if (this.refreshInterval) {
-            clearInterval(this.refreshInterval);
-            this.refreshInterval = null;
-        }
-    }
-    
-    /**
      * Cleanup
      */
     destroy() {
@@ -322,12 +270,9 @@ class TrafficIndicator {
         }
         
         this.isVisible = false;
-        this.lastStatusHash = null;
-        this.forceNextUpdate = false;
-        
         console.log('🧹 TrafficIndicator distrutto');
     }
 }
 
-// Export per uso globale
+// Export globale
 window.TrafficIndicator = TrafficIndicator;
