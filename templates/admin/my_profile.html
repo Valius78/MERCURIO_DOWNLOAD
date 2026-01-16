@@ -201,6 +201,92 @@
 				</div>
 			</div>
         </div>
+        <!-- NUOVA SEZIONE: Statistiche Traffico Personali -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-line text-primary"></i> 
+                    Le Mie Statistiche Traffico
+                    <div class="float-end">
+                        <button id="refreshPersonalTrafficBtn" class="btn btn-sm btn-outline-primary" onclick="loadMyTrafficStats()">
+                            <i class="fas fa-sync-alt"></i> Aggiorna
+                        </button>
+                    </div>
+                </h5>
+            </div>
+            
+            <div class="card-body">
+                <!-- Indicatore caricamento -->
+                <div id="myTrafficLoading" class="text-center py-3">
+                    <i class="fas fa-spinner fa-spin fa-lg text-primary"></i>
+                    <p class="mt-2 mb-0">Caricamento...</p>
+                </div>
+                
+                <!-- Container statistiche -->
+                <div id="myTrafficContainer" style="display: none;">
+                    
+                    <!-- Stato attuale + limite -->
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="card bg-light border-0">
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-6">
+                                            <h6 class="mb-1">Limite Giornaliero</h6>
+                                            <h4 id="myLimitDisplay" class="text-primary mb-0">-</h4>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h6 class="mb-1">Utilizzato Oggi</h6>
+                                            <h4 id="myUsedDisplay" class="mb-0">-</h4>
+                                            <div class="progress mt-2" style="height: 8px;">
+                                                <div id="myUsageProgress" class="progress-bar" style="width: 0%"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Statistiche rapide -->
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <div class="text-center p-2 bg-light rounded">
+                                <h6 class="text-success mb-1" id="myTodayMB">-</h6>
+                                <small class="text-muted">Oggi</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-center p-2 bg-light rounded">
+                                <h6 class="text-warning mb-1" id="myWeekMB">-</h6>
+                                <small class="text-muted">Settimana</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-center p-2 bg-light rounded">
+                                <h6 class="text-info mb-1" id="myMonthMB">-</h6>
+                                <small class="text-muted">Mese</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Info reset -->
+                    <div class="alert alert-info mb-0">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Reset automatico:</strong> Ogni giorno alle 00:00 UTC
+                        <span class="float-end">
+                            <small id="myDownloadCount">0 download oggi</small>
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- Container errore -->
+                <div id="myTrafficError" class="alert alert-danger" style="display: none;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Errore:</strong> <span id="myTrafficErrorMsg">Impossibile caricare le statistiche</span>
+                </div>
+            </div>
+        </div>
         
        
     </div>
@@ -262,5 +348,111 @@ document.getElementById('passwordForm').addEventListener('submit', function(e) {
         return false;
     }
 });
+</script>
+<script>
+// Statistiche traffico personali
+document.addEventListener('DOMContentLoaded', function() {
+    loadMyTrafficStats();
+    
+    // Auto-refresh ogni 60 secondi
+    setInterval(loadMyTrafficStats, 60000);
+});
+
+async function loadMyTrafficStats() {
+    const loadingEl = document.getElementById('myTrafficLoading');
+    const containerEl = document.getElementById('myTrafficContainer');
+    const errorEl = document.getElementById('myTrafficError');
+    const refreshBtn = document.getElementById('refreshPersonalTrafficBtn');
+    
+    try {
+        loadingEl.style.display = 'block';
+        containerEl.style.display = 'none';
+        errorEl.style.display = 'none';
+        if (refreshBtn) refreshBtn.disabled = true;
+        
+        // Usa API esistente
+        const response = await fetch('/api/user/traffic-status');
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.message || 'Errore API');
+        }
+        
+        if (data.status === 'success') {
+            updateMyTrafficDisplay(data.traffic_status);
+            
+            loadingEl.style.display = 'none';
+            containerEl.style.display = 'block';
+        } else {
+            throw new Error(data.message || 'Formato risposta non valido');
+        }
+        
+    } catch (error) {
+        console.error('❌ Errore statistiche personali:', error);
+        
+        loadingEl.style.display = 'none';
+        errorEl.style.display = 'block';
+        document.getElementById('myTrafficErrorMsg').textContent = error.message;
+        
+    } finally {
+        if (refreshBtn) refreshBtn.disabled = false;
+    }
+}
+
+function updateMyTrafficDisplay(stats) {
+    // Controlli esistenza elementi
+    const limitDisplay = document.getElementById('myLimitDisplay');
+    const usedDisplay = document.getElementById('myUsedDisplay');
+    const progressBar = document.getElementById('myUsageProgress');
+    
+    if (!limitDisplay || !usedDisplay || !progressBar) {
+        console.warn('❌ Elementi HTML traffico non trovati');
+        return;
+    }
+    
+    // Limite
+    if (stats.is_unlimited) {
+        limitDisplay.innerHTML = '<i class="fas fa-infinity"></i> Illimitato';
+        limitDisplay.className = 'text-primary mb-0';
+    } else {
+        limitDisplay.textContent = `${stats.limit_mb} MB`;
+        limitDisplay.className = 'text-primary mb-0';
+    }
+    
+    // Utilizzo
+    usedDisplay.textContent = `${stats.used_mb} MB`;
+    
+    // Progress bar e colori
+    if (stats.is_unlimited) {
+        progressBar.style.width = '0%';
+        progressBar.className = 'progress-bar bg-primary';
+        usedDisplay.className = 'text-primary mb-0';
+    } else {
+        const percentage = (stats.used_mb / stats.limit_mb) * 100;
+        progressBar.style.width = `${Math.min(percentage, 100)}%`;
+        
+        if (percentage >= 90) {
+            progressBar.className = 'progress-bar bg-danger';
+            usedDisplay.className = 'text-danger mb-0';
+        } else if (percentage >= 70) {
+            progressBar.className = 'progress-bar bg-warning';
+            usedDisplay.className = 'text-warning mb-0';
+        } else {
+            progressBar.className = 'progress-bar bg-success';
+            usedDisplay.className = 'text-success mb-0';
+        }
+    }
+    
+    // Statistiche rapide - CON CONTROLLI NULL
+    const todayEl = document.getElementById('myTodayMB');
+    const weekEl = document.getElementById('myWeekMB');
+    const monthEl = document.getElementById('myMonthMB');
+    const countEl = document.getElementById('myDownloadCount');
+    
+    if (todayEl) todayEl.textContent = `${stats.used_mb} MB`;
+    if (weekEl) weekEl.textContent = `~${(stats.used_mb * 7).toFixed(1)} MB`;
+    if (monthEl) monthEl.textContent = `~${(stats.used_mb * 30).toFixed(1)} MB`;
+    if (countEl) countEl.textContent = `${stats.download_count || 0} download oggi`;
+}
 </script>
 {% endblock %}

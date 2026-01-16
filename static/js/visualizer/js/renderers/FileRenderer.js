@@ -529,6 +529,10 @@ class FileRenderer {
             
             // NUOVO: Aggiorna status traffico dopo download
             this.updateTrafficStatusAfterDownload();
+
+            if (typeof window.refreshAllTrafficIndicators === 'function') {
+                setTimeout(() => window.refreshAllTrafficIndicators(), 1000);
+            }
             
         } catch (error) {
             console.error('❌ Errore download file:', error);

@@ -9,6 +9,7 @@ from functools import wraps
 from flask import session, request, jsonify
 from utils.db import execute_query
 import logging
+from utils.minio_client import get_minio_bucket_name
 
 # ===================================================================
 # FUNZIONI CORE CONTROLLO TRAFFICO
@@ -67,15 +68,14 @@ def get_user_daily_usage(user_id, target_date=None):
 
 def update_user_traffic_usage(user_id, bytes_added):
     """Aggiorna contatori traffico utente"""
-    # DEBUG: Aggiungi questi log
-    print(f"🔍 DEBUG: user_id={user_id}, bytes_added={bytes_added}")
+
     
     if not user_id or bytes_added <= 0:
-        print(f"⚠️ DEBUG: Skip update - user_id={user_id}, bytes_added={bytes_added}")
+
         return True  # Skip per utenti non autenticati o download 0-byte
     
     today = date.today()
-    print(f"📅 DEBUG: Updating traffic for date={today}")
+
     
     
     try:
@@ -91,7 +91,7 @@ def update_user_traffic_usage(user_id, bytes_added):
         """
         
         result = execute_query(upsert_query, (user_id, today, bytes_added))
-        print(f"✅ DEBUG: Traffic update successful, result={result}")
+
         
         if result:
             mb_added = bytes_added / (1024 * 1024)
@@ -184,43 +184,45 @@ def traffic_control(calculate_size_func=None):
         @wraps(func)
         def wrapper(*args, **kwargs):
             user_id = get_current_user_id()
-            
-            # Admin bypass
-            if is_admin_user(user_id):
-                logging.info(f"🔓 Admin bypass traffico per user {user_id}")
-                return func(*args, **kwargs)
+            is_admin = is_admin_user(user_id)
             
             try:
-                # Calcola dimensione prevista
+                # Calcola dimensione prevista (per tutti)
                 if calculate_size_func:
                     estimated_bytes = calculate_size_func(*args, **kwargs)
                 else:
                     # Stima default basata sui parametri
                     estimated_bytes = estimate_download_size(*args, **kwargs)
                 
-                # Controlla limite
-                can_download, error_msg, current_usage = check_traffic_limit(user_id, estimated_bytes)
-                
-                if not can_download:
-                    # Limite superato - restituisci errore HTTP 429
-                    usage_mb = current_usage['bytes_downloaded'] / (1024 * 1024)
-                    limit_mb = get_user_traffic_limit(user_id)
+                # ✅ CORREZIONE: Solo utenti NON admin controllano i limiti
+                if not is_admin:
+                    # Controlla limite solo per utenti normali
+                    can_download, error_msg, current_usage = check_traffic_limit(user_id, estimated_bytes)
                     
-                    return jsonify({
-                        'error': 'traffic_limit_exceeded',
-                        'message': error_msg,
-                        'usage_mb': round(usage_mb, 2),
-                        'limit_mb': limit_mb,
-                        'download_count': current_usage['download_count'],
-                        'reset_time': 'mezzanotte UTC'
-                    }), 429  # HTTP 429 Too Many Requests
+                    if not can_download:
+                        # Limite superato - restituisci errore HTTP 429
+                        usage_mb = current_usage['bytes_downloaded'] / (1024 * 1024)
+                        limit_mb = get_user_traffic_limit(user_id)
+                        
+                        return jsonify({
+                            'error': 'traffic_limit_exceeded',
+                            'message': error_msg,
+                            'usage_mb': round(usage_mb, 2),
+                            'limit_mb': limit_mb,
+                            'download_count': current_usage['download_count'],
+                            'reset_time': 'mezzanotte UTC'
+                        }), 429  # HTTP 429 Too Many Requests
+                else:
+                    # Log bypass admin
+                    logging.info(f"Admin user {user_id} bypass traffic limit - tracking attivo")
                 
-                # OK - procedi con download e traccia
+                # ✅ Download per tutti (admin e utenti normali)
                 response = func(*args, **kwargs)
                 
-                # Aggiorna contatori (in background, non bloccare response)
+                # ✅ Tracking post-download per tutti (admin inclusi)
                 try:
                     update_user_traffic_usage(user_id, estimated_bytes)
+                    logging.debug(f"Traffic updated: user_id={user_id}, bytes={estimated_bytes}")
                 except Exception as e:
                     logging.error(f"Errore aggiornamento traffico: {e}")
                     # Non bloccare il download se il tracking fallisce
@@ -306,24 +308,15 @@ def estimate_postgres_csv_size(query, params):
         return 1024 * 1024  # 1MB fallback
 
 def estimate_minio_file_size(file_path):
-    """
-    Stima dimensione file Minio (se disponibile stat, altrimenti stima)
-    """
     try:
-        # Prova a ottenere dimensione reale dal Minio
-        from utils.minio_client import get_minio_client
+        from utils.minio_client import get_minio_client, get_minio_bucket_name
         
         client = get_minio_client()
+        bucket_name = get_minio_bucket_name()  # ← USA QUESTO
+        
         if client:
-            # Estrai bucket e object dalla path
-            # Assumendo formato: bucket/path/file.ext
-            parts = file_path.split('/', 2)
-            if len(parts) >= 2:
-                bucket = parts[0]
-                object_name = '/'.join(parts[1:])
-                
-                stat = client.stat_object(bucket, object_name)
-                return stat.size
+            stat = client.stat_object(bucket_name, file_path)  # ← NON SPLIT PATH
+            return stat.size
         
         # Fallback: stima da estensione
         if any(file_path.lower().endswith(ext) for ext in ['.jpg', '.png', '.jpeg']):

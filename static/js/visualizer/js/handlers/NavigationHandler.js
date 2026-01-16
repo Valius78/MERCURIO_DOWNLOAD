@@ -904,6 +904,10 @@ class NavigationHandler {
                 downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Creazione ZIP...';
             }
             
+            if (typeof window.refreshAllTrafficIndicators === 'function') {
+                    setTimeout(() => window.refreshAllTrafficIndicators(), 1000);
+            }
+            
             // Trigger download
             const response = await fetch(downloadUrl);
             

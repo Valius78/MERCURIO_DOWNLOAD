@@ -317,6 +317,26 @@
                 });
             });
         });
+
+		// Funzione globale per aggiornare TUTTI gli indicatori traffico
+		window.refreshAllTrafficIndicators = function() {
+			console.log('🔄 Refreshing traffic indicators...');
+			
+			// 1. Aggiorna TrafficIndicator (se presente)
+			if (window.readingsVisualizer && window.readingsVisualizer.trafficIndicator) {
+				window.readingsVisualizer.trafficIndicator.updateStatus();
+			}
+			
+			// 2. Aggiorna My Profile stats (se sulla pagina profilo)
+			if (typeof loadMyTrafficStats === 'function') {
+				loadMyTrafficStats();
+			}
+			
+			// 3. Aggiorna statistiche admin user detail (se presente)
+			if (typeof loadUserTrafficStats === 'function') {
+				loadUserTrafficStats();
+			}
+		};
     </script>
     
     {% block extra_js %}{% endblock %}

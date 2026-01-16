@@ -183,6 +183,209 @@ def validate_traffic_limit(limit_mb):
         
     except (ValueError, TypeError):
         return False, "Il limite deve essere un numero valido"
+    
+def get_users_with_traffic_data():
+    """Recupera utenti con dati traffico giornaliero integrati"""
+    try:
+        from datetime import date
+        
+        # Query principale: utenti + limite + consumo oggi
+        query = """
+        SELECT 
+            u.user_id, u.email, u.nome, u.cognome, u.ente_azienda,
+            u.is_active, u.last_login, u.created_at, u.daily_traffic_limit_mb,
+            r.name as role_name, r.description as role_description,
+            COUNT(ut.token_id) as active_tokens,
+            
+            -- TRAFFICO OGGI
+            COALESCE(td.bytes_downloaded, 0) as bytes_downloaded_today,
+            COALESCE(td.download_count, 0) as download_count_today,
+            td.last_updated as last_traffic_update
+            
+        FROM users u
+        LEFT JOIN user_roles ur ON u.user_id = ur.user_id
+        LEFT JOIN roles r ON ur.role_id = r.role_id  
+        LEFT JOIN user_tokens ut ON u.user_id = ut.user_id AND ut.is_active = true
+        LEFT JOIN user_daily_traffic td ON u.user_id = td.user_id AND td.traffic_date = %s
+        
+        GROUP BY u.user_id, u.email, u.nome, u.cognome, u.ente_azienda,
+                 u.is_active, u.last_login, u.created_at, u.daily_traffic_limit_mb,
+                 r.name, r.description, td.bytes_downloaded, td.download_count, td.last_updated
+        ORDER BY u.created_at DESC
+        """
+        
+        today = date.today()
+        users = execute_query(query, (today,), fetch=True)
+        
+        # Calcola percentuali e badge
+        for user in users:
+            limit_mb = user['daily_traffic_limit_mb'] or 0
+            used_bytes = user['bytes_downloaded_today'] or 0
+            used_mb = used_bytes / (1024 * 1024)
+            
+            user['used_mb_today'] = round(used_mb, 2)
+            
+            if limit_mb == 0:  # Nessun limite
+                user['usage_percentage'] = 0
+                user['badge_color'] = 'primary'
+                user['badge_icon'] = '♾️'
+                user['status_text'] = 'Illimitato'
+            else:
+                percentage = (used_mb / limit_mb) * 100
+                user['usage_percentage'] = round(percentage, 1)
+                
+                if percentage >= 95:
+                    user['badge_color'] = 'danger'
+                    user['badge_icon'] = '🚨'
+                    user['status_text'] = f'{percentage:.0f}% - LIMITE'
+                elif percentage >= 80:
+                    user['badge_color'] = 'warning' 
+                    user['badge_icon'] = '⚠️'
+                    user['status_text'] = f'{percentage:.0f}% - Alto'
+                elif percentage >= 50:
+                    user['badge_color'] = 'info'
+                    user['badge_icon'] = '📊'
+                    user['status_text'] = f'{percentage:.0f}%'
+                else:
+                    user['badge_color'] = 'success'
+                    user['badge_icon'] = '✅'
+                    user['status_text'] = f'{percentage:.0f}%'
+        
+        return users
+        
+    except Exception as e:
+        print(f"❌ Errore get_users_with_traffic_data: {e}")
+        return get_all_users()  # Fallback
+    
+@admin_bp.route('/users/<int:user_id>/traffic-stats')
+@admin_required
+def user_traffic_stats(user_id):
+    """API statistiche traffico dettagliate per utente specifico (solo admin)"""
+    try:
+        from datetime import date, timedelta
+        
+        # Verifica che l'utente esista
+        user_check = execute_query("SELECT email, nome, cognome FROM users WHERE user_id = %s", (user_id,), fetch=True)
+        if not user_check:
+            return jsonify({'error': 'Utente non trovato'}), 404
+        
+        user_info = user_check[0]
+        today = date.today()
+        
+        # Statistiche ultimi 7 giorni
+        week_query = """
+        SELECT 
+            traffic_date,
+            bytes_downloaded / (1024.0 * 1024) as mb_downloaded,
+            download_count,
+            last_updated
+        FROM user_daily_traffic 
+        WHERE user_id = %s 
+          AND traffic_date >= %s 
+          AND traffic_date <= %s
+        ORDER BY traffic_date DESC
+        """
+        
+        week_start = today - timedelta(days=6)  # 7 giorni incluso oggi
+        week_data = execute_query(week_query, (user_id, week_start, today), fetch=True) or []
+        
+        # Statistiche riepilogative
+        summary_query = """
+        SELECT 
+            SUM(CASE WHEN traffic_date = %s THEN bytes_downloaded ELSE 0 END) / (1024.0 * 1024) as today_mb,
+            SUM(CASE WHEN traffic_date = %s THEN bytes_downloaded ELSE 0 END) / (1024.0 * 1024) as yesterday_mb,
+            SUM(CASE WHEN traffic_date >= %s THEN bytes_downloaded ELSE 0 END) / (1024.0 * 1024) as week_mb,
+            SUM(CASE WHEN traffic_date >= %s THEN bytes_downloaded ELSE 0 END) / (1024.0 * 1024) as month_mb,
+            
+            SUM(CASE WHEN traffic_date = %s THEN download_count ELSE 0 END) as today_downloads,
+            SUM(CASE WHEN traffic_date = %s THEN download_count ELSE 0 END) as yesterday_downloads,
+            SUM(CASE WHEN traffic_date >= %s THEN download_count ELSE 0 END) as week_downloads,
+            SUM(CASE WHEN traffic_date >= %s THEN download_count ELSE 0 END) as month_downloads
+        FROM user_daily_traffic 
+        WHERE user_id = %s
+        """
+        
+        yesterday = today - timedelta(days=1)
+        month_start = today - timedelta(days=29)  # 30 giorni
+        
+        summary_data = execute_query(summary_query, (
+            today, yesterday, week_start, month_start,
+            today, yesterday, week_start, month_start,
+            user_id
+        ), fetch=True)
+        
+        # Limite utente attuale
+        limit_query = "SELECT daily_traffic_limit_mb FROM users WHERE user_id = %s"
+        limit_result = execute_query(limit_query, (user_id,), fetch=True)
+        current_limit = limit_result[0]['daily_traffic_limit_mb'] if limit_result else 50
+        
+        # Formatta risposta
+        response_data = {
+            'user_info': {
+                'user_id': user_id,
+                'email': user_info['email'],
+                'nome': user_info['nome'],
+                'cognome': user_info['cognome'],
+                'current_limit_mb': current_limit
+            },
+            'summary': {
+                'today': {
+                    'mb': round(summary_data[0]['today_mb'] or 0, 2),
+                    'downloads': summary_data[0]['today_downloads'] or 0
+                },
+                'yesterday': {
+                    'mb': round(summary_data[0]['yesterday_mb'] or 0, 2),
+                    'downloads': summary_data[0]['yesterday_downloads'] or 0
+                },
+                'week': {
+                    'mb': round(summary_data[0]['week_mb'] or 0, 2),
+                    'downloads': summary_data[0]['week_downloads'] or 0
+                },
+                'month': {
+                    'mb': round(summary_data[0]['month_mb'] or 0, 2),
+                    'downloads': summary_data[0]['month_downloads'] or 0
+                }
+            },
+            'week_history': []
+        }
+        
+        # Prepara dati per grafico (ultimi 7 giorni completi)
+        week_data_dict = {row['traffic_date'].isoformat(): row for row in week_data}
+        
+        for i in range(7):
+            date_check = week_start + timedelta(days=i)
+            date_str = date_check.isoformat()
+            
+            if date_str in week_data_dict:
+                row = week_data_dict[date_str]
+                response_data['week_history'].append({
+                    'date': date_str,
+                    'date_display': date_check.strftime('%d/%m'),
+                    'mb': round(row['mb_downloaded'] or 0, 2),
+                    'downloads': row['download_count'] or 0
+                })
+            else:
+                response_data['week_history'].append({
+                    'date': date_str,
+                    'date_display': date_check.strftime('%d/%m'),
+                    'mb': 0,
+                    'downloads': 0
+                })
+        
+        return jsonify({
+            'status': 'success',
+            'data': response_data,
+            'timestamp': today.isoformat()
+        })
+        
+    except Exception as e:
+        import traceback
+        print(f"❌ Errore user_traffic_stats: {e}")
+        print(traceback.format_exc())
+        return jsonify({
+            'status': 'error', 
+            'message': str(e)
+        }), 500
 
 # ================================================
 # ROUTES GESTIONE UTENTI
@@ -191,8 +394,8 @@ def validate_traffic_limit(limit_mb):
 @admin_bp.route('/users')
 @admin_required
 def users():
-    """Pagina lista utenti - solo admin"""
-    users_list = get_all_users() or []
+    """Pagina lista utenti con traffico - solo admin"""
+    users_list = get_users_with_traffic_data() or []
     
     return render_template('admin/users.html', 
                          users=users_list,
@@ -459,8 +662,8 @@ def my_profile():
     # Recupera dati completi utente
     query = """
     SELECT u.user_id, u.email, u.nome, u.cognome, u.ente_azienda,
-           u.is_active, u.last_login, u.created_at,
-           r.name as role_name, r.description as role_description
+        u.is_active, u.last_login, u.created_at, u.daily_traffic_limit_mb,
+        r.name as role_name, r.description as role_description
     FROM users u
     LEFT JOIN user_roles ur ON u.user_id = ur.user_id
     LEFT JOIN roles r ON ur.role_id = r.role_id

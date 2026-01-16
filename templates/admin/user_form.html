@@ -280,6 +280,107 @@
         </div>
     </div>
 </form>
+{% if user and action == 'edit' %}
+<!-- ======================================================= -->
+<!-- SEZIONE STATISTICHE TRAFFICO UTENTE -->
+<!-- ======================================================= -->
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-chart-line text-primary"></i> 
+            Statistiche Traffico
+            <div class="float-end">
+                <button id="refreshTrafficBtn" class="btn btn-sm btn-outline-primary" onclick="loadUserTrafficStats()">
+                    <i class="fas fa-sync-alt"></i> Aggiorna
+                </button>
+            </div>
+        </h5>
+    </div>
+    
+    <div class="card-body">
+        <!-- Indicatore caricamento -->
+        <div id="trafficLoading" class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-primary"></i>
+            <p class="mt-2">Caricamento statistiche traffico...</p>
+        </div>
+        
+        <!-- Container statistiche -->
+        <div id="trafficStatsContainer" style="display: none;">
+            
+            <!-- Riepilogo rapido -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card bg-light border-0">
+                        <div class="card-body text-center">
+                            <h5 class="text-success mb-1" id="todayMB">-</h5>
+                            <small class="text-muted">Oggi</small>
+                            <br><span class="badge bg-success" id="todayDownloads">0 download</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light border-0">
+                        <div class="card-body text-center">
+                            <h5 class="text-info mb-1" id="yesterdayMB">-</h5>
+                            <small class="text-muted">Ieri</small>
+                            <br><span class="badge bg-info" id="yesterdayDownloads">0 download</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light border-0">
+                        <div class="card-body text-center">
+                            <h5 class="text-warning mb-1" id="weekMB">-</h5>
+                            <small class="text-muted">7 Giorni</small>
+                            <br><span class="badge bg-warning" id="weekDownloads">0 download</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light border-0">
+                        <div class="card-body text-center">
+                            <h5 class="text-primary mb-1" id="monthMB">-</h5>
+                            <small class="text-muted">30 Giorni</small>
+                            <br><span class="badge bg-primary" id="monthDownloads">0 download</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Grafico ultimi 7 giorni -->
+            <div class="row">
+                <div class="col-12">
+                    <h6 class="text-muted mb-3">
+                        <i class="fas fa-chart-bar"></i> Traffico Ultimi 7 Giorni
+                    </h6>
+                    <div style="width: 100%; height: 250px;">
+                        <canvas id="trafficChart" width="400" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Info limite -->
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Limite Attuale:</strong> <span id="currentLimitDisplay">-</span> MB/giorno
+                        <span class="float-end">
+                            <small class="text-muted">Reset: 00:00 UTC ogni giorno</small>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Container errore -->
+        <div id="trafficError" class="alert alert-danger" style="display: none;">
+            <i class="fas fa-exclamation-triangle"></i>
+            <strong>Errore:</strong> <span id="trafficErrorMessage">Impossibile caricare le statistiche</span>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <script>
 // Validazione password
@@ -402,5 +503,160 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+{% if user and action == 'edit' %}
+// Include Chart.js
+const chartScript = document.createElement('script');
+chartScript.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+document.head.appendChild(chartScript);
+
+let trafficChart = null;
+const userId = {{ user.user_id }};
+
+async function loadUserTrafficStats() {
+    const loadingEl = document.getElementById('trafficLoading');
+    const containerEl = document.getElementById('trafficStatsContainer'); 
+    const errorEl = document.getElementById('trafficError');
+    const refreshBtn = document.getElementById('refreshTrafficBtn');
+    
+    try {
+        // Mostra loading
+        loadingEl.style.display = 'block';
+        containerEl.style.display = 'none';
+        errorEl.style.display = 'none';
+        refreshBtn.disabled = true;
+        
+        // Chiama API
+        const response = await fetch(`/admin/users/${userId}/traffic-stats`);
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.message || 'Errore API');
+        }
+        
+        if (data.status === 'success') {
+            // Popola riepilogo
+            populateSummaryCards(data.data.summary);
+            
+            // Aggiorna limit display
+            const limitDisplay = document.getElementById('currentLimitDisplay');
+            const limit = data.data.user_info.current_limit_mb;
+            limitDisplay.textContent = limit === 0 ? '♾️ Illimitato' : limit;
+            
+            // Crea grafico
+            createTrafficChart(data.data.week_history);
+            
+            // Mostra container
+            loadingEl.style.display = 'none';
+            containerEl.style.display = 'block';
+            
+        } else {
+            throw new Error(data.message || 'Formato risposta non valido');
+        }
+        
+    } catch (error) {
+        console.error('❌ Errore caricamento traffico stats:', error);
+        
+        // Mostra errore
+        loadingEl.style.display = 'none';
+        errorEl.style.display = 'block';
+        document.getElementById('trafficErrorMessage').textContent = error.message;
+        
+    } finally {
+        refreshBtn.disabled = false;
+    }
+}
+
+function populateSummaryCards(summary) {
+    // Oggi
+    document.getElementById('todayMB').textContent = `${summary.today.mb} MB`;
+    document.getElementById('todayDownloads').textContent = `${summary.today.downloads} download`;
+    
+    // Ieri  
+    document.getElementById('yesterdayMB').textContent = `${summary.yesterday.mb} MB`;
+    document.getElementById('yesterdayDownloads').textContent = `${summary.yesterday.downloads} download`;
+    
+    // Settimana
+    document.getElementById('weekMB').textContent = `${summary.week.mb} MB`;
+    document.getElementById('weekDownloads').textContent = `${summary.week.downloads} download`;
+    
+    // Mese
+    document.getElementById('monthMB').textContent = `${summary.month.mb} MB`;
+    document.getElementById('monthDownloads').textContent = `${summary.month.downloads} download`;
+}
+
+function createTrafficChart(weekData) {
+    const ctx = document.getElementById('trafficChart').getContext('2d');
+    
+    // Distruggi grafico precedente
+    if (trafficChart) {
+        trafficChart.destroy();
+    }
+    
+    const labels = weekData.map(d => d.date_display);
+    const mbData = weekData.map(d => d.mb);
+    const downloadData = weekData.map(d => d.downloads);
+    
+    trafficChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'MB Scaricati',
+                data: mbData,
+                borderColor: '#0d6efd',
+                backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                tension: 0.1,
+                yAxisID: 'y'
+            }, {
+                label: 'Download',
+                data: downloadData,
+                borderColor: '#198754',
+                backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                tension: 0.1,
+                yAxisID: 'y1'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'MB'
+                    }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Download'
+                    },
+                    grid: {
+                        drawOnChartArea: false,
+                    },
+                }
+            },
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Andamento Traffico (Ultimi 7 Giorni)'
+                }
+            }
+        }
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(() => loadUserTrafficStats(), 1000); // Aspetta Chart.js
+});
+
+{% endif %}
 </script>
 {% endblock %}
+

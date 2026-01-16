@@ -137,7 +137,8 @@
                     <tr>
                         <th>Utente</th>
                         <th>Ruolo</th>
-                        <th>Limite MB/giorno</th>  <!-- NUOVA COLONNA -->
+                        <th>Limite MB/giorno</th>
+                        <th>Consumo Oggi</th>  <!-- NUOVA COLONNA -->
                         <th>Token</th>
                         <th>Stato</th>
                         <th>Ultimo Accesso</th>
@@ -190,6 +191,32 @@
                                         <i class="fas fa-crown text-warning" title="Limite elevato"></i>
                                     {% endif %}
                                 {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            <!-- NUOVA CELLA CONSUMO OGGI -->
+                            <div class="d-flex align-items-center">
+                                <span class="badge bg-{{ user.badge_color }} me-2" 
+                                    data-bs-toggle="tooltip" 
+                                    data-bs-placement="top"
+                                    title="Download: {{ user.download_count_today or 0 }} - Aggiornato: {{ user.last_traffic_update.strftime('%H:%M') if user.last_traffic_update else 'Mai' }}">
+                                    {{ user.badge_icon }} {{ user.status_text }}
+                                </span>
+                                
+                                {% if user.daily_traffic_limit_mb != 0 and user.used_mb_today > 0 %}
+                                <div class="progress" style="width: 60px; height: 6px;">
+                                    <div class="progress-bar bg-{{ user.badge_color }}" 
+                                        style="width: {{ user.usage_percentage }}%"></div>
+                                </div>
+                                {% endif %}
+                                
+                                <small class="text-muted ms-2">
+                                    {% if user.used_mb_today > 0 %}
+                                        {{ user.used_mb_today }} MB
+                                    {% else %}
+                                        0 MB
+                                    {% endif %}
+                                </small>
                             </div>
                         </td>
                         <td>
@@ -273,14 +300,20 @@
 
 {% block scripts %}
 <script>
+// Inizializza tooltip Bootstrap
 document.addEventListener('DOMContentLoaded', function() {
-    // Inizializza tooltip per le icone limite
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
-    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
-    
-    console.log('✅ Tooltip limiti traffico inizializzati');
 });
+
+// Auto-refresh ogni 30 secondi per aggiornare consumi
+setInterval(function() {
+    // Ricarica solo se l'utente non sta interagendo
+    if (document.hidden === false) {
+        location.reload();
+    }
+}, 30000);
 </script>
 {% endblock %}

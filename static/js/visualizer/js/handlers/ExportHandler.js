@@ -269,20 +269,16 @@ class ExportHandler {
     /**
      * NUOVO: Aggiorna status traffico dopo download
      */
-    async updateTrafficStatusAfterDownload() {
+    updateTrafficStatusAfterDownload() {
         try {
-            if (window.readingsVisualizer && window.readingsVisualizer.apiClient && 
-                typeof window.readingsVisualizer.apiClient.getTrafficStatus === 'function') {
-                
-                const statusResponse = await window.readingsVisualizer.apiClient.getTrafficStatus();
-                
-                if (statusResponse.status === 'success' && window.readingsVisualizer.trafficIndicator) {
-                    window.readingsVisualizer.trafficIndicator.updateStatus();
-                }
+            // Usa funzione globale
+            if (typeof window.refreshAllTrafficIndicators === 'function') {
+                window.refreshAllTrafficIndicators();
+            } else {
+                console.warn('⚠️ refreshAllTrafficIndicators non trovata');
             }
         } catch (error) {
-            console.error('Errore aggiornamento status traffico:', error);
-            // Non bloccare l'operazione se il tracking fallisce
+            console.warn('⚠️ Errore refresh traffic indicators:', error);
         }
     }
     
