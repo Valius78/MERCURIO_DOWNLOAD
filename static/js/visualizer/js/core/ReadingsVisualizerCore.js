@@ -23,6 +23,13 @@ class ReadingsVisualizerCore {
         this.navigationHandler = new NavigationHandler(this.dataManager, this.apiClient, this.fileRenderer);
         this.exportHandler = new ExportHandler(this.dataManager, this.apiClient);
         
+        // ✅ NUOVO: Traffic Control Manager
+        this.trafficControlManager = new TrafficControlManager(this.apiClient);
+
+        // ✅ NUOVO: Download Progress Modal
+        this.downloadProgressModal = new DownloadProgressModal(this.trafficControlManager);
+
+
         // Stato interno
         this.initialized = false;
         
@@ -54,8 +61,61 @@ class ReadingsVisualizerCore {
             this.trafficIndicator = new TrafficIndicator(this.apiClient);
             await this.trafficIndicator.initialize();
 
+            // ✅ COLLEGA: TrafficIndicator al TrafficControlManager
+            if (this.trafficIndicator && this.trafficControlManager) {
+                this.trafficControlManager.initialize(this.trafficIndicator);
+                this.trafficIndicator.setTrafficControlManager(this.trafficControlManager);
+            }
+
+            this.downloadProgressModal.initialize();
+
             // Rendi accessibile globalmente per i download
             window.readingsVisualizerTrafficIndicator = this.trafficIndicator;
+            window.readingsVisualizerTrafficControlManager = this.trafficControlManager;
+            window.readingsVisualizerDownloadProgressModal = this.downloadProgressModal;
+
+            // ✅ HELPER FUNCTIONS: Rendi disponibili globalmente
+            window.startTrackedDownload = (downloadId, downloadInfo, downloadFunction) => {
+                // Verifica disponibilità componenti
+                if (!window.readingsVisualizerDownloadProgressModal || !window.readingsVisualizerTrafficControlManager) {
+                    console.warn('⚠️ Sistema tracking download non disponibile, fallback a download diretto');
+                    return downloadFunction();
+                }
+                
+                const progressModal = window.readingsVisualizerDownloadProgressModal;
+                
+                // Avvia tracking nel modal
+                const canStart = progressModal.startDownload(downloadId, downloadInfo);
+                if (!canStart) {
+                    console.warn('⚠️ Download bloccato (duplicato)');
+                    return Promise.reject(new Error('Download duplicato'));
+                }
+                
+                // Aggiorna stato download
+                progressModal.updateDownload(downloadId, { status: 'downloading', progress: 10 });
+                
+                // Esegui download con tracking
+                return downloadFunction()
+                    .then((result) => {
+                        progressModal.updateDownload(downloadId, { status: 'downloading', progress: 90 });
+                        
+                        setTimeout(() => {
+                            progressModal.completeDownload(downloadId, { success: true, ...result });
+                        }, 500);
+                        
+                        return result;
+                    })
+                    .catch((error) => {
+                        progressModal.completeDownload(downloadId, { success: false, error: error.message });
+                        throw error;
+                    });
+            };
+
+            window.generateDownloadId = (type, identifier) => {
+                const timestamp = Date.now();
+                const random = Math.random().toString(36).substring(2, 8);
+                return `${type}_${identifier}_${timestamp}_${random}`;
+            };
             
         } catch (error) {
             console.error('❌ Errore inizializzazione core:', error);
@@ -878,6 +938,14 @@ class ReadingsVisualizerCore {
             this.fileRenderer.cleanup();
         } catch (error) {
             console.warn('⚠️ Errore cleanup fileRenderer:', error);
+        }
+
+        // ✅ CLEANUP: Nuovi componenti
+        if (this.trafficControlManager) {
+            this.trafficControlManager.destroy();
+        }
+        if (this.downloadProgressModal) {
+            this.downloadProgressModal.destroy();
         }
         
         // Reset UI state completo

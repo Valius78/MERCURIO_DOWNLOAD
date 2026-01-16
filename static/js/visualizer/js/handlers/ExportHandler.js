@@ -36,94 +36,116 @@ class ExportHandler {
     }
     
     /**
-     * NUOVO: Export tramite endpoint unificato streaming
+     * NUOVO: Export tramite endpoint unificato streaming con tracking
      */
     async exportViaUnifiedEndpoint(itemType, itemId) {
         try {
             console.log(`📤 Export streaming: ${itemType}/${itemId}`);
             
-            // Ottieni range date dal form
-            const selectedPeriod = DateUtils.getSelectedPeriod();
-            const dateRange = DateUtils.getDateRange(selectedPeriod);
+            // Genera ID download univoco
+            const downloadId = window.generateDownloadId ? 
+                window.generateDownloadId('csv', `${itemType}_${itemId}`) : 
+                `${itemType}_${itemId}_${Date.now()}`;
             
-            // Costruisci URL endpoint unificato
-            const params = new URLSearchParams({
-                start_date: dateRange.start_date || '',
-                end_date: dateRange.end_date || ''
-            });
+            // Info download
+            const downloadInfo = {
+                type: 'CSV',
+                name: `Export ${itemType} ${itemId}`,
+                filename: `${itemType}_${itemId}_export.csv`
+            };
             
-            const downloadUrl = `/api/download/${itemType}/${itemId}?${params.toString()}`;
-            
-            console.log(`🔗 Download URL: ${downloadUrl}`);
-            
-            // Mostra indicatore di download
-            this.showDownloadIndicator(true);
-            
-            try {
-                // Trigger download diretto del browser
-                const response = await fetch(downloadUrl);
+            // Funzione download originale
+            const downloadFunction = async () => {
+                // Ottieni range date dal form
+                const selectedPeriod = DateUtils.getSelectedPeriod();
+                const dateRange = DateUtils.getDateRange(selectedPeriod);
                 
-                // *** NUOVA GESTIONE ERRORE TRAFFICO ***
-                if (response.status === 429) {
-                    const errorData = await response.json();
-                    console.warn('⚠️ Traffico limite superato:', errorData);
+                // Costruisci URL endpoint unificato
+                const params = new URLSearchParams({
+                    start_date: dateRange.start_date || '',
+                    end_date: dateRange.end_date || ''
+                });
+                
+                const downloadUrl = `/api/download/${itemType}/${itemId}?${params.toString()}`;
+                
+                console.log(`🔗 Download URL: ${downloadUrl}`);
+                
+                // Mostra indicatore di download
+                this.showDownloadIndicator(true);
+                
+                try {
+                    // Trigger download diretto del browser
+                    const response = await fetch(downloadUrl);
                     
-                    // Delega gestione errore ad ApiClient se disponibile
-                    if (window.readingsVisualizer && window.readingsVisualizer.apiClient && 
-                        typeof window.readingsVisualizer.apiClient.handleTrafficLimitError === 'function') {
-                        window.readingsVisualizer.apiClient.handleTrafficLimitError(errorData);
-                    } else {
-                        // Fallback: mostra alert semplice
-                        alert(`Limite traffico superato: ${errorData.message}\n\nDisponibile: ${errorData.usage_mb}/${errorData.limit_mb} MB\nReset: ${errorData.reset_time}`);
+                    // Gestione errore traffico
+                    if (response.status === 429) {
+                        const errorData = await response.json();
+                        console.warn('⚠️ Traffico limite superato:', errorData);
+                        
+                        // Delega gestione errore ad ApiClient se disponibile
+                        if (window.readingsVisualizer && window.readingsVisualizer.apiClient && 
+                            typeof window.readingsVisualizer.apiClient.handleTrafficLimitError === 'function') {
+                            window.readingsVisualizer.apiClient.handleTrafficLimitError(errorData);
+                        } else {
+                            // Fallback: mostra alert semplice
+                            alert(`Limite traffico superato: ${errorData.message}\n\nDisponibile: ${errorData.usage_mb}/${errorData.limit_mb} MB\nReset: ${errorData.reset_time}`);
+                        }
+                        
+                        throw new Error(`Traffico limite superato: ${errorData.message}`);
                     }
                     
-                    return; // Stop qui, non procedere con download
-                }
-                // *** FINE NUOVA GESTIONE ***
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                // Leggi response come blob per download
-                const blob = await response.blob();
-                
-                // Estrai filename dal header Content-Disposition
-                let filename = `${itemType}_${itemId}_export.csv`;
-                const contentDisposition = response.headers.get('Content-Disposition');
-                if (contentDisposition) {
-                    const matches = contentDisposition.match(/filename="([^"]+)"/);
-                    if (matches && matches[1]) {
-                        filename = matches[1];
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                     }
+                    
+                    // Leggi response come blob per download
+                    const blob = await response.blob();
+                    
+                    // Estrai filename dal header Content-Disposition
+                    let filename = `${itemType}_${itemId}_export.csv`;
+                    const contentDisposition = response.headers.get('Content-Disposition');
+                    if (contentDisposition) {
+                        const matches = contentDisposition.match(/filename="([^"]+)"/);
+                        if (matches && matches[1]) {
+                            filename = matches[1];
+                        }
+                    }
+                    
+                    // Download via browser
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    
+                    // Cleanup
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    console.log(`✅ Export completato: ${filename}`);
+                    
+                    return { success: true, size: blob.size, filename };
+                    
+                } finally {
+                    // Nascondi indicatore
+                    this.showDownloadIndicator(false);
                 }
-                
-                // Trigger download
-                this.triggerBrowserDownload(blob, filename);
-                
-                console.log(`✅ Export completato: ${filename}`);
-                
-                // *** NUOVA: Aggiorna status traffico dopo download riuscito ***
-                this.updateTrafficStatusAfterDownload();
-                
-            } catch (fetchError) {
-                console.error('❌ Errore fetch download:', fetchError);
-                
-                // Fallback: apri in nuova finestra
-                console.log('⚠️ Fallback: apertura in nuova finestra');
-                window.open(downloadUrl, '_blank');
+            };
+            
+            // Usa sistema tracking se disponibile, altrimenti fallback
+            if (window.startTrackedDownload) {
+                return await window.startTrackedDownload(downloadId, downloadInfo, downloadFunction);
+            } else {
+                console.warn('⚠️ Sistema tracking non disponibile, fallback a download diretto');
+                return await downloadFunction();
             }
             
         } catch (error) {
-            console.error('❌ Errore export unificato:', error);
+            console.error('❌ Errore export:', error);
+            alert('Errore durante l\'export: ' + error.message);
             throw error;
-        } finally {
-            this.showDownloadIndicator(false);
-            
-            // *** NUOVA: Aggiorna status dopo tentativo ***
-            setTimeout(() => {
-                this.updateTrafficStatusAfterDownload();
-            }, 1000);
         }
     }
     

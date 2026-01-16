@@ -795,7 +795,6 @@ class NavigationHandler {
                 // CORREZIONE: RETURN per evitare esecuzione blocchi successivi
                 this.isNavigating = false;
                 return;
-                
             } else if (previousState.type === 'parameter_root') {
                 // Torna alle cartelle radici del parametro
                 console.log('📋 Tornando alle cartelle root del parametro');
@@ -870,8 +869,8 @@ class NavigationHandler {
     }
     
     /**
-     * Download file selezionati come ZIP tramite endpoint unificato
-     */
+    * Download file selezionati come ZIP tramite endpoint unificato con tracking
+    */
     async downloadSelectedAsZip() {
         const selectedFiles = Array.from(document.querySelectorAll('.folder-file-select:checked'))
             .map(cb => cb.getAttribute('data-file-path'));
@@ -885,63 +884,110 @@ class NavigationHandler {
             console.log(`📤 Download ZIP: ${selectedFiles.length} file selezionati`);
             
             // Nome ZIP basato sulla cartella evento
-            const folderName = this.currentFolderPath.split('/').pop() || 'files';
+            const folderName = this.currentFolderPath ? this.currentFolderPath.split('/').pop() : 'files';
             const zipName = `${folderName}.zip`;
             
-            // NUOVO: Usa endpoint unificato per ZIP streaming
-            const params = new URLSearchParams();
-            selectedFiles.forEach(path => params.append('file_paths', path));
-            params.append('zip_name', zipName);
+            // Genera ID download univoco
+            const downloadId = window.generateDownloadId ? 
+                window.generateDownloadId('zip', folderName) : 
+                `zip_${folderName}_${Date.now()}`;
             
-            const downloadUrl = `/api/download/files/0?${params.toString()}`;
+            // Info download
+            const downloadInfo = {
+                type: 'ZIP',
+                name: `ZIP: ${folderName}`,
+                filename: zipName,
+                fileCount: selectedFiles.length,
+                folder: folderName
+            };
             
-            console.log(`🔗 ZIP Download URL: ${downloadUrl}`);
+            // Funzione download originale
+            const downloadFunction = async () => {
+                // NUOVO: Usa endpoint unificato per ZIP streaming
+                const params = new URLSearchParams();
+                selectedFiles.forEach(path => params.append('file_paths', path));
+                params.append('zip_name', zipName);
+                
+                const downloadUrl = `/api/download/files/0?${params.toString()}`;
+                
+                console.log(`🔗 ZIP Download URL: ${downloadUrl}`);
+                
+                // Mostra indicatore di download
+                const downloadBtn = document.getElementById('downloadSelectedFiles');
+                if (downloadBtn) {
+                    downloadBtn.disabled = true;
+                    downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Creazione ZIP...';
+                }
+                
+                try {
+                    // Trigger download
+                    const response = await fetch(downloadUrl);
+                    
+                    // Gestione errori traffico
+                    if (response.status === 429) {
+                        const errorData = await response.json();
+                        console.warn('⚠️ ZIP download - traffico limite superato:', errorData);
+                        
+                        if (window.readingsVisualizer && window.readingsVisualizer.apiClient) {
+                            window.readingsVisualizer.apiClient.handleTrafficLimitError(errorData);
+                        } else {
+                            alert(`Limite traffico superato: ${errorData.message}`);
+                        }
+                        
+                        throw new Error(`Traffico limite superato: ${errorData.message}`);
+                    }
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const blob = await response.blob();
+                    
+                    // Download diretto del browser
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = zipName;
+                    document.body.appendChild(a);
+                    a.click();
+                    
+                    // Cleanup
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    console.log(`✅ ZIP download completato: ${zipName}`);
+                    
+                    return { success: true, size: blob.size, filename: zipName };
+                    
+                } finally {
+                    // Reset pulsante
+                    if (downloadBtn) {
+                        downloadBtn.disabled = false;
+                        downloadBtn.innerHTML = '<i class="fas fa-file-archive me-1"></i> Download ZIP <span id="selectedFileCount">(0)</span>';
+                    }
+                }
+            };
             
-            // Mostra indicatore di download
-            const downloadBtn = document.getElementById('downloadSelectedFiles');
-            if (downloadBtn) {
-                downloadBtn.disabled = true;
-                downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Creazione ZIP...';
-            }
-            
-            if (typeof window.refreshAllTrafficIndicators === 'function') {
+            // Usa sistema tracking se disponibile, altrimenti fallback
+            if (window.startTrackedDownload) {
+                return await window.startTrackedDownload(downloadId, downloadInfo, downloadFunction);
+            } else {
+                console.warn('⚠️ Sistema tracking non disponibile, fallback');
+                const result = await downloadFunction();
+                
+                // Fallback: Aggiorna traffico manualmente
+                if (typeof window.refreshAllTrafficIndicators === 'function') {
                     setTimeout(() => window.refreshAllTrafficIndicators(), 1000);
+                }
+                
+                return result;
             }
-            
-            // Trigger download
-            const response = await fetch(downloadUrl);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            
-            const blob = await response.blob();
-            
-            // Download diretto del browser
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = zipName;
-            document.body.appendChild(a);
-            a.click();
-            
-            // Cleanup
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            
-            console.log(`✅ ZIP download completato: ${zipName}`);
             
         } catch (error) {
             console.error('❌ Errore download ZIP:', error);
             alert('Errore nel download ZIP: ' + error.message);
-        } finally {
-            // Reset pulsante
-            const downloadBtn = document.getElementById('downloadSelectedFiles');
-            if (downloadBtn) {
-                downloadBtn.disabled = false;
-                downloadBtn.innerHTML = '<i class="fas fa-file-archive me-1"></i> Download ZIP <span id="selectedFileCount">(0)</span>';
-            }
+            throw error;
         }
     }
     

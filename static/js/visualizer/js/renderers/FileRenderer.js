@@ -469,7 +469,7 @@ class FileRenderer {
     }
     
     /**
-     * Download file singolo tramite endpoint unificato
+     * Download file singolo tramite endpoint unificato con tracking
      */
     async downloadFile(filePath, fileName) {
         if (this.downloading) {
@@ -477,71 +477,100 @@ class FileRenderer {
             return;
         }
         this.downloading = true;
+        
         try {
             console.log(`📥 Download file: ${fileName}`);
             
-            // NUOVO: Usa endpoint unificato per download streaming
-            const downloadUrl = `/api/download/file/0?file_path=${encodeURIComponent(filePath)}`;
+            // Genera ID download univoco
+            const downloadId = window.generateDownloadId ? 
+                window.generateDownloadId('file', fileName) : 
+                `file_${fileName}_${Date.now()}`;
             
-            console.log(`🔗 File Download URL: ${downloadUrl}`);
+            // Info download
+            const downloadInfo = {
+                type: this.getFileType(fileName),
+                name: fileName,
+                filename: fileName,
+                filePath: filePath
+            };
             
-            // Trigger download diretto del browser
-            const response = await fetch(downloadUrl);
-            
-            // NUOVO: Gestione errori traffico
-            if (response.status === 429) {
-                const errorData = await response.json();
-                console.warn('⚠️ File download - traffico limite superato:', errorData);
+            // Funzione download originale
+            const downloadFunction = async () => {
+                // NUOVO: Usa endpoint unificato per download streaming
+                const downloadUrl = `/api/download/file/0?file_path=${encodeURIComponent(filePath)}`;
                 
-                // Delega gestione errore ad ApiClient
-                if (window.readingsVisualizer && window.readingsVisualizer.apiClient) {
-                    window.readingsVisualizer.apiClient.handleTrafficLimitError(errorData);
+                console.log(`🔗 File Download URL: ${downloadUrl}`);
+                
+                // Trigger download diretto del browser
+                const response = await fetch(downloadUrl);
+                
+                // NUOVO: Gestione errori traffico
+                if (response.status === 429) {
+                    const errorData = await response.json();
+                    console.warn('⚠️ File download - traffico limite superato:', errorData);
+                    
+                    // Delega gestione errore ad ApiClient
+                    if (window.readingsVisualizer && window.readingsVisualizer.apiClient) {
+                        window.readingsVisualizer.apiClient.handleTrafficLimitError(errorData);
+                    }
+                    
+                    throw new Error(`Traffico limite superato: ${errorData.message}`);
                 }
                 
-                return; // Stop qui
-            }
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            
-            const blob = await response.blob();
-            
-            // Estrai filename dal header se disponibile
-            let downloadFileName = fileName;
-            const contentDisposition = response.headers.get('Content-Disposition');
-            if (contentDisposition) {
-                const matches = contentDisposition.match(/filename="([^"]+)"/);
-                if (matches && matches[1]) {
-                    downloadFileName = matches[1];
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
-            }
+                
+                const blob = await response.blob();
+                
+                // Estrai filename dal header se disponibile
+                let downloadFileName = fileName;
+                const contentDisposition = response.headers.get('Content-Disposition');
+                if (contentDisposition) {
+                    const matches = contentDisposition.match(/filename="([^"]+)"/);
+                    if (matches && matches[1]) {
+                        downloadFileName = matches[1];
+                    }
+                }
+                
+                // Download via browser
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = downloadFileName;
+                document.body.appendChild(a);
+                a.click();
+                
+                // Cleanup
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                console.log(`✅ Download completato: ${downloadFileName}`);
+                
+                return { success: true, size: blob.size, filename: downloadFileName };
+            };
             
-            // Download via browser
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = downloadFileName;
-            document.body.appendChild(a);
-            a.click();
-            
-            // Cleanup
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            
-            console.log(`✅ Download completato: ${downloadFileName}`);
-            
-            // NUOVO: Aggiorna status traffico dopo download
-            this.updateTrafficStatusAfterDownload();
-
-            if (typeof window.refreshAllTrafficIndicators === 'function') {
-                setTimeout(() => window.refreshAllTrafficIndicators(), 1000);
+            // Usa sistema tracking se disponibile, altrimenti fallback + aggiornamento traffico
+            if (window.startTrackedDownload) {
+                return await window.startTrackedDownload(downloadId, downloadInfo, downloadFunction);
+            } else {
+                console.warn('⚠️ Sistema tracking non disponibile, fallback');
+                const result = await downloadFunction();
+                
+                // Fallback: Aggiorna manualmente status traffico
+                this.updateTrafficStatusAfterDownload();
+                if (typeof window.refreshAllTrafficIndicators === 'function') {
+                    setTimeout(() => window.refreshAllTrafficIndicators(), 1000);
+                }
+                
+                return result;
             }
             
         } catch (error) {
             console.error('❌ Errore download file:', error);
             alert('Errore nel download: ' + error.message);
+            throw error;
         } finally {
             // Reset flag dopo 2 secondi
             setTimeout(() => {
@@ -550,9 +579,35 @@ class FileRenderer {
         }
     }
 
+    /**
+     * Helper: Determina tipo file dall'estensione
+     */
+    getFileType(fileName) {
+        const ext = fileName.toLowerCase().split('.').pop();
+        switch (ext) {
+            case 'pdf': return 'PDF';
+            case 'csv': return 'CSV';
+            case 'json': return 'JSON';
+            case 'txt': return 'TXT';
+            case 'jpg':
+            case 'jpeg':
+            case 'png':
+            case 'gif': return 'IMG';
+            case 'mp4':
+            case 'avi':
+            case 'mov': return 'VID';
+            case 'zip':
+            case 'rar': return 'ZIP';
+            default: return 'FILE';
+        }
+    }
+    
     async updateTrafficStatusAfterDownload() {
         try {
-            if (window.readingsVisualizerTrafficIndicator) {
+            // Usa TrafficControlManager se disponibile, altrimenti fallback
+            if (window.readingsVisualizerTrafficControlManager) {
+                window.readingsVisualizerTrafficControlManager.scheduleTrafficUpdate('file_download_complete');
+            } else if (window.readingsVisualizerTrafficIndicator) {
                 await window.readingsVisualizerTrafficIndicator.updateStatusNow();
             } else {
                 console.warn('Traffic Indicator non disponibile per aggiornamento');

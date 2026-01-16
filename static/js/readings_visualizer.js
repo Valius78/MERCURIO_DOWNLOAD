@@ -23,6 +23,10 @@ class ReadingsVisualizerProxy {
             await this.loadScript(`${VISUALIZER_BASE}js/utils/FileUtils.js`);
             await this.loadScript(`${VISUALIZER_BASE}js/utils/ApiClient.js`);
             await this.loadScript(`${VISUALIZER_BASE}js/utils/TrafficIndicator.js`);
+            await this.loadScript(`${VISUALIZER_BASE}js/utils/DownloadProgressModal.js`);
+            await this.loadScript(`${VISUALIZER_BASE}js/utils/TrafficControlManager.js`);
+
+            
             
             // 2. Core (dipende da utils)
             await this.loadScript(`${VISUALIZER_BASE}js/core/DataManager.js`);
