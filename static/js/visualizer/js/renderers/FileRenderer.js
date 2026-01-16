@@ -472,6 +472,11 @@ class FileRenderer {
      * Download file singolo tramite endpoint unificato
      */
     async downloadFile(filePath, fileName) {
+        if (this.downloading) {
+            console.warn('⚠️ Download già in corso, ignoro richiesta duplicata');
+            return;
+        }
+        this.downloading = true;
         try {
             console.log(`📥 Download file: ${fileName}`);
             
@@ -536,25 +541,21 @@ class FileRenderer {
             
         } catch (error) {
             console.error('❌ Errore download file:', error);
-            
-            // Fallback al metodo legacy
-            console.log('⚠️ Fallback al metodo legacy');
-            try {
-                await this.apiClient.downloadFile(filePath, fileName);
-            } catch (fallbackError) {
-                alert('Errore nel download: ' + error.message);
-            }
+            alert('Errore nel download: ' + error.message);
+        } finally {
+            // Reset flag dopo 2 secondi
+            setTimeout(() => {
+                this.downloading = false;
+            }, 2000);
         }
     }
 
     async updateTrafficStatusAfterDownload() {
         try {
-            if (window.readingsVisualizer && window.readingsVisualizer.apiClient) {
-                const statusResponse = await window.readingsVisualizer.apiClient.getTrafficStatus();
-                
-                if (statusResponse.status === 'success') {
-                    window.readingsVisualizer.updateTrafficIndicator(statusResponse.traffic_status);
-                }
+            if (window.readingsVisualizerTrafficIndicator) {
+                await window.readingsVisualizerTrafficIndicator.updateStatusNow();
+            } else {
+                console.warn('Traffic Indicator non disponibile per aggiornamento');
             }
         } catch (error) {
             console.error('Errore aggiornamento status traffico:', error);
@@ -585,9 +586,21 @@ class FileRenderer {
      * Download files selezionati tramite endpoint unificato
      */
     async downloadSelectedFiles() {
+        // Prevenzione doppi click/chiamate multiple
+        if (this.downloadingMultiple) {
+            console.warn('⚠️ Download multiplo già in corso');
+            return;
+        }
+        this.downloadingMultiple = true;
         const selectedFiles = Array.from(document.querySelectorAll('.file-select:checked'))
             .map(cb => cb.getAttribute('data-file-path'));
-        
+
+        if (this.downloadingMultiple) {
+            console.warn('⚠️ Download multiplo già in corso');
+            return;
+        }
+        this.downloadingMultiple = true;
+    
         if (selectedFiles.length === 0) {
             alert('Seleziona almeno un file');
             return;
@@ -629,10 +642,20 @@ class FileRenderer {
             }
             
             console.log('✅ Download selezionati completato');
+
+            // Aggiorna traffic indicator immediatamente  
+            if (window.readingsVisualizerTrafficIndicator) {
+                await window.readingsVisualizerTrafficIndicator.updateStatusNow();
+            }
             
         } catch (error) {
             console.error('❌ Errore download selezionati:', error);
             alert('Errore nel download: ' + error.message);
+        } finally {
+            // Reset flag dopo 2 secondi
+            setTimeout(() => {
+                this.downloadingMultiple = false;
+            }, 2000);
         }
     }
     
@@ -651,9 +674,15 @@ class FileRenderer {
      * Bind eventi per file cards
      */
     bindFileCardEvents() {
+        // Rimuovi event listener esistenti per prevenire duplicati
         document.querySelectorAll('.file-select').forEach(checkbox => {
-            checkbox.addEventListener('change', () => this.updateSelectedCount());
+            checkbox.removeEventListener('change', this.updateSelectedCountBound);
         });
+
+        // Bind per updateSelectedCount con riferimento per rimozione
+        if (!this.updateSelectedCountBound) {
+            this.updateSelectedCountBound = () => this.updateSelectedCount();
+        }
     }
     
     /**

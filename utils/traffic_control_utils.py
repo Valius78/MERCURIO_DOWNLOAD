@@ -223,6 +223,7 @@ def traffic_control(calculate_size_func=None):
                 try:
                     update_user_traffic_usage(user_id, estimated_bytes)
                     logging.debug(f"Traffic updated: user_id={user_id}, bytes={estimated_bytes}")
+                    logging.info(f"🔍 TRAFFIC DEBUG: user={user_id}, bytes={estimated_bytes}, func={func.__name__}")
                 except Exception as e:
                     logging.error(f"Errore aggiornamento traffico: {e}")
                     # Non bloccare il download se il tracking fallisce
