@@ -269,16 +269,15 @@ class ExportHandler {
     /**
      * NUOVO: Aggiorna status traffico dopo download
      */
-    updateTrafficStatusAfterDownload() {
+    async updateTrafficStatusAfterDownload() {
         try {
-            // Usa funzione globale
-            if (typeof window.refreshAllTrafficIndicators === 'function') {
-                window.refreshAllTrafficIndicators();
+            if (window.readingsVisualizerTrafficIndicator) {
+                await window.readingsVisualizerTrafficIndicator.updateStatusNow();
             } else {
-                console.warn('⚠️ refreshAllTrafficIndicators non trovata');
+                console.warn('Traffic Indicator non disponibile per aggiornamento');
             }
         } catch (error) {
-            console.warn('⚠️ Errore refresh traffic indicators:', error);
+            console.error('Errore aggiornamento status traffico:', error);
         }
     }
     

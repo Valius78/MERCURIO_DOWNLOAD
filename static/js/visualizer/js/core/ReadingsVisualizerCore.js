@@ -51,12 +51,11 @@ class ReadingsVisualizerCore {
             console.log('✅ ReadingsVisualizerCore inizializzato con successo');
 
             // Inizializza Traffic Indicator
-            if (typeof TrafficIndicator !== 'undefined') {
-                this.trafficIndicator = new TrafficIndicator(this.apiClient);
-                await this.trafficIndicator.initialize();
-            } else {
-                console.warn('TrafficIndicator non disponibile');
-            }
+            this.trafficIndicator = new TrafficIndicator(this.apiClient);
+            await this.trafficIndicator.initialize();
+
+            // Rendi accessibile globalmente per i download
+            window.readingsVisualizerTrafficIndicator = this.trafficIndicator;
             
         } catch (error) {
             console.error('❌ Errore inizializzazione core:', error);

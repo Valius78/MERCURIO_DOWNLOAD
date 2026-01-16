@@ -36,36 +36,34 @@ class TrafficIndicator {
      */
     createContainer() {
         // Cerca dove inserire l'indicatore (es. nella navbar o sidebar)
-        const navbarNav = document.querySelector('.navbar-nav');
-        const sidebar = document.querySelector('.sidebar');
-        const insertTarget = navbarNav || sidebar || document.body;
-        
-        // HTML indicatore
+        const userBox = document.querySelector('div[style*="background: rgba(0,0,0,0.3)"]');
+        const insertTarget = userBox || document.querySelector('.sidebar') || document.body;
+    
+        // HTML indicatore semplificato per riquadro utente
         const indicatorHTML = `
-            <div id="traffic-indicator" class="traffic-indicator d-none">
-                <div class="card border-0 shadow-sm mb-2" style="font-size: 0.875rem;">
-                    <div class="card-body p-2">
-                        <div class="d-flex align-items-center">
-                            <i class="fas fa-download text-primary me-2"></i>
-                            <div class="flex-grow-1">
-                                <div class="traffic-info">
-                                    <span class="traffic-text">Caricamento...</span>
-                                </div>
-                                <div class="progress mt-1" style="height: 4px;">
-                                    <div class="progress-bar bg-primary" style="width: 0%"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+            <div id="traffic-indicator" class="mt-2" style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 8px; display: block;">
+                <small class="text-white d-block" style="font-size: 0.7rem; opacity: 0.9;">
+                    <i class="fas fa-download me-1"></i>
+                    <span class="traffic-text">Caricamento...</span>
+                </small>
+                <div class="progress mt-1" style="height: 3px; background: rgba(255,255,255,0.2);">
+                    <div class="progress-bar" style="width: 0%; background: #ffc107;"></div>
                 </div>
             </div>
         `;
         
         // Inserisci nell'DOM
-        if (navbarNav) {
-            navbarNav.insertAdjacentHTML('afterend', indicatorHTML);
-        } else if (sidebar) {
-            sidebar.insertAdjacentHTML('afterbegin', indicatorHTML);
+
+        if (insertTarget === userBox) {
+            // Trova il link logout e inserisci dopo
+            const logoutLink = userBox.querySelector('a[href="/auth/logout"]');
+            if (logoutLink) {
+                logoutLink.insertAdjacentHTML('afterend', indicatorHTML);
+            } else {
+                insertTarget.insertAdjacentHTML('beforeend', indicatorHTML);
+            }
+        } else if (insertTarget.classList?.contains('sidebar')) {
+            insertTarget.insertAdjacentHTML('afterbegin', indicatorHTML);
         } else {
             document.body.insertAdjacentHTML('afterbegin', indicatorHTML);
         }
@@ -92,6 +90,14 @@ class TrafficIndicator {
             this.hide();
         }
     }
+
+    /**
+     * Aggiornamento immediato dopo download (pubblico)
+     */
+    async updateStatusNow() {
+        console.log('🔄 Aggiornamento immediato traffic status...');
+        await this.updateStatus();
+    }
     
     /**
      * Renderizza status nella UI
@@ -103,14 +109,13 @@ class TrafficIndicator {
         
         const textEl = this.container.querySelector('.traffic-text');
         const progressBar = this.container.querySelector('.progress-bar');
-        const cardBody = this.container.querySelector('.card-body');
         
         if (is_unlimited) {
             // Utente illimitato
             textEl.innerHTML = `<strong>Illimitato</strong> (${used_mb.toFixed(1)} MB oggi)`;
             progressBar.style.width = '0%';
             progressBar.className = 'progress-bar bg-primary';
-            cardBody.className = 'card-body p-2 border-start border-primary border-3';
+            
             
         } else if (limit_mb > 0) {
             // Utente con limite
@@ -123,20 +128,20 @@ class TrafficIndicator {
             // Colore progress bar basato su utilizzo
             if (percentage >= 90) {
                 progressBar.className = 'progress-bar bg-danger';
-                cardBody.className = 'card-body p-2 border-start border-danger border-3';
+                
             } else if (percentage >= 70) {
                 progressBar.className = 'progress-bar bg-warning';
-                cardBody.className = 'card-body p-2 border-start border-warning border-3';
+                
             } else {
                 progressBar.className = 'progress-bar bg-success';
-                cardBody.className = 'card-body p-2 border-start border-success border-3';
+               
             }
         } else {
             // Fallback
             textEl.innerHTML = `${used_mb.toFixed(1)} MB utilizzati`;
             progressBar.style.width = '0%';
             progressBar.className = 'progress-bar bg-secondary';
-            cardBody.className = 'card-body p-2';
+            
         }
     }
     
@@ -144,8 +149,8 @@ class TrafficIndicator {
      * Mostra indicatore
      */
     show() {
-        if (this.container && !this.isVisible) {
-            this.container.classList.remove('d-none');
+        if (this.container) {
+            this.container.style.display = 'block';
             this.isVisible = true;
         }
     }
@@ -155,7 +160,7 @@ class TrafficIndicator {
      */
     hide() {
         if (this.container && this.isVisible) {
-            this.container.classList.add('d-none');
+            this.container.style.display = 'none';
             this.isVisible = false;
         }
     }
